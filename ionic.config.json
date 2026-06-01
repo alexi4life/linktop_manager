@@ -1,0 +1,7 @@
+{
+  "name": "linktop-health-monitor",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}
