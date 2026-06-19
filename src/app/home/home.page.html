@@ -1,20 +1,209 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar>
-    <ion-title>
-      Blank
-    </ion-title>
+    <ion-title>Monitor Linktop</ion-title>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
-    </ion-toolbar>
-  </ion-header>
+<ion-content class="ion-padding">
+  <ion-card color="light">
+    <ion-card-content class="ion-text-center">
+      <strong>Estado:</strong> {{ estadoBluetooth }}
+    </ion-card-content>
+  </ion-card>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
+  <div *ngIf="!conectado" class="ion-text-center ion-margin-top">
+    <ion-button expand="block" color="primary" (click)="buscarDispositivo()">
+      Buscar y Conectar Monitor
+    </ion-button>
+  </div>
+
+  <div *ngIf="conectado">
+    <!-- Botón para medir la temperatura corporal -->
+    <div class="ion-margin-bottom">
+      <ion-button
+        expand="block"
+        color="success"
+        (click)="medirBT()"
+        [disabled]="midiendoBT || midiendoOX"
+      >
+        {{ midiendoBT ? 'Midiendo Temperatura...' : 'Medir Temperatura Corporal'
+        }}
+      </ion-button>
+
+      <!-- Botón para medir oxígeno y pulso -->
+      <ion-button
+        expand="block"
+        color="danger"
+        (click)="medirOX()"
+        [disabled]="midiendoBT || midiendoOX"
+        class="ion-margin-top"
+      >
+        {{ midiendoOX ? 'Midiendo Oxígeno...' : 'Medir Oxígeno y Pulso' }}
+      </ion-button>
+
+      <!-- Botón para consultar la batería del dispositivo -->
+      <ion-button
+        expand="block"
+        color="medium"
+        (click)="consultarBateria()"
+        class="ion-margin-top"
+      >
+        Consultar Batería
+      </ion-button>
+
+      <!-- Botón para medir la presión arterial -->
+      <ion-button
+        expand="block"
+        color="tertiary"
+        (click)="medirBP()"
+        [disabled]="midiendoBP || midiendoBT || midiendoOX"
+        class="ion-margin-top"
+      >
+        {{ midiendoBP ? 'Midiendo Presión...' : 'Medir Presión Arterial' }}
+      </ion-button>
+
+      <!-- Botón cancelar — solo visible durante mediciones largas -->
+      <ion-button
+        expand="block"
+        color="danger"
+        (click)="cancelarMedicion()"
+        *ngIf="midiendoOX || midiendoBP"
+        class="ion-margin-top"
+      >
+        Cancelar medición
+      </ion-button>
+    </div>
+
+    <!-- Spinner y mensajes durante la medición de temperatura -->
+    <div class="ion-text-center ion-margin-top" *ngIf="midiendoBT">
+      <ion-spinner name="crescent" color="success"></ion-spinner>
+      <p>Coloca el dedo firmemente en el sensor térmico...</p>
+    </div>
+
+    <!-- Spinner y mensajes durante la medición de oxígeno -->
+    <div class="ion-text-center ion-margin-top" *ngIf="midiendoOX">
+      <ion-spinner
+        name="crescent"
+        color="danger"
+        *ngIf="dedoPuesto"
+      ></ion-spinner>
+      <p *ngIf="dedoPuesto" style="font-weight: bold; margin-top: 8px">
+        Mantenga el dedo presionado sobre el sensor.
+      </p>
+      <p
+        *ngIf="!dedoPuesto"
+        style="
+          color: var(--ion-color-danger);
+          font-weight: bold;
+          font-size: 1.1rem;
+        "
+      >
+        🚨 Coloca el dedo de nuevo sobre el sensor rojo para continuar
+      </p>
+    </div>
+
+    <!-- Spinner durante la medición de presión -->
+    <div class="ion-text-center ion-margin-top" *ngIf="midiendoBP">
+      <ion-spinner name="crescent" color="tertiary"></ion-spinner>
+      <p style="font-weight: bold; margin-top: 8px">
+        Mantenga el brazo quieto y relajado...
+      </p>
+    </div>
+
+    <!-- Mensaje de error en la medición de presión -->
+    <ion-card
+      color="warning"
+      *ngIf="errorBP !== null && !midiendoBP"
+      class="ion-margin-top"
+    >
+      <ion-card-content class="ion-text-center">
+        <p style="font-weight: bold">{{ errorBP }}</p>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Mensaje de error al levantar el dedo — fuera del bloque midiendoOX
+         para que siga visible después de que la medición se interrumpa -->
+    <ion-card
+      color="warning"
+      *ngIf="errorOxigeno !== null && !midiendoOX"
+      class="ion-margin-top"
+    >
+      <ion-card-content class="ion-text-center">
+        <p style="font-weight: bold">{{ errorOxigeno }}</p>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Resultado de temperatura -->
+    <ion-card
+      color="success"
+      *ngIf="temperatura !== null && !midiendoBT"
+      class="ion-margin-top"
+    >
+      <ion-card-content class="ion-text-center">
+        <h1 style="font-size: 2.5rem; margin: 0">{{ temperatura }} °C</h1>
+        <p style="margin-top: 5px; font-weight: bold">Temperatura Corporal</p>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Resultados de oxígeno y pulso -->
+    <div
+      *ngIf="spo2 !== null && pulso !== null && !midiendoOX"
+      class="ion-margin-top"
+    >
+      <ion-card color="danger">
+        <ion-card-content class="ion-text-center">
+          <h1 style="font-size: 2.5rem; margin: 0">
+            {{ spo2 | number:'1.0-2'}} %
+          </h1>
+          <p style="margin-top: 5px; font-weight: bold">
+            Saturación de Oxígeno (SpO2)
+          </p>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card color="medium" class="ion-margin-top">
+        <ion-card-content class="ion-text-center">
+          <h1 style="font-size: 2.5rem; margin: 0">{{ pulso }} ppm</h1>
+          <p style="margin-top: 5px; font-weight: bold">Frecuencia Cardíaca</p>
+        </ion-card-content>
+      </ion-card>
+    </div>
+    <!-- Resultado del nivel de batería -->
+    <ion-card color="light" *ngIf="bateria !== null" class="ion-margin-top">
+      <ion-card-content class="ion-text-center">
+        <h1 style="font-size: 2.5rem; margin: 0">{{ bateria }} %</h1>
+        <p style="margin-top: 5px; font-weight: bold">
+          Batería del dispositivo
+        </p>
+        <p
+          *ngIf="cargando"
+          style="color: var(--ion-color-success); font-weight: bold"
+        >
+          ⚡ Cargando...
+        </p>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Resultados de presión arterial -->
+    <div
+      *ngIf="presionSistolica !== null && presionDiastolica !== null && !midiendoBP"
+      class="ion-margin-top"
+    >
+      <ion-card color="tertiary">
+        <ion-card-content class="ion-text-center">
+          <h1 style="font-size: 2.5rem; margin: 0">
+            {{ presionSistolica }} / {{ presionDiastolica }} mmHg
+          </h1>
+          <p style="margin-top: 5px; font-weight: bold">Presión Arterial</p>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card color="medium" class="ion-margin-top">
+        <ion-card-content class="ion-text-center">
+          <h1 style="font-size: 2.5rem; margin: 0">{{ pulsoBP }} ppm</h1>
+          <p style="margin-top: 5px; font-weight: bold">Frecuencia Cardíaca</p>
+        </ion-card-content>
+      </ion-card>
+    </div>
   </div>
 </ion-content>
