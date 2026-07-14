@@ -8,9 +8,21 @@ import {
   IonCard,
   IonCardContent,
   IonSpinner,
+  IonIcon,
 } from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import {
+  thermometerOutline,
+  waterOutline,
+  pulseOutline,
+  batteryHalfOutline,
+  heartOutline,
+  checkmarkCircle,
+  warningOutline,
+} from 'ionicons/icons';
 import { LinktopService } from '../services/linktop';
 import { CommonModule } from '@angular/common';
+import { HistorialService } from '../services/historial.service';
 
 @Component({
   selector: 'app-home',
@@ -26,6 +38,7 @@ import { CommonModule } from '@angular/common';
     IonCard,
     IonCardContent,
     IonSpinner,
+    IonIcon,
     CommonModule,
   ],
 })
@@ -56,94 +69,84 @@ export class HomePage implements OnInit {
   pulsoBP: number | null = null;
   errorBP: string | null = null;
 
+  // VARIABLES ECG
+  midiendoECG: boolean = false;
+  errorECG: string | null = null;
+  puntosECG: number[] = [];
+  private ecgAnimacionActiva: boolean = false;
+  ecgHR: number | null = null;
+  ecgHRV: number | null = null;
+  dedoPuestoECG: boolean = true;
+
   constructor(
     private LTS: LinktopService,
     private cdr: ChangeDetectorRef,
-  ) {}
+    private historial: HistorialService,
+  ) {
+    // Registramos los iconos que vamos a usar en las tarjetas (necesario en standalone components)
+    addIcons({
+      thermometerOutline,
+      batteryHalfOutline,
+      waterOutline,
+      pulseOutline,
+      heartOutline,
+      //thermometerOutline: thermometerOutline,
+      //waterOutline: waterOutline,
+      //pulseOutline: pulseOutline,
+      //batteryHalfOutline: batteryHalfOutline,
+      //heartOutline: heartOutline,
+      checkmarkCircle: checkmarkCircle,
+      warningOutline: warningOutline,
+    });
+  }
 
-  /**
-   * Ciclo de vida de inicialización del componente.
-   * Se ejecuta automáticamente al cargar la vista para activar el hardware Bluetooth
-   * a través del servicio (`LTS`) y almacenar el estado inicial en la interfaz de usuario.
-   */
   async ngOnInit() {
-    // Llamamos a la inicialización del servicio y guardamos su respuesta
     this.estadoBluetooth = await this.LTS.inicializarBluetooth();
   }
 
-  /**
-   * Inicia el proceso visual y lógico de búsqueda y conexión con el monitor de salud.
-   * Actualiza las variables de estado de la interfaz para reflejar el progreso del escaneo
-   * y consolida el estado final del componente según el éxito de la operación.
-   */
   async buscarDispositivo() {
-    // Cambia el estado visual para informar al usuario que ha comenzado el rastreo BLE
     this.estadoBluetooth = 'Buscando el monitor de salud Linktop...';
-
-    // Invoca el flujo del servicio (LTS) para solicitar el dispositivo y emparejarlo
     const respuesta = await this.LTS.escanearConectar();
-
-    // Refleja en la interfaz el mensaje final devuelto (éxito o descripción del error)
     this.estadoBluetooth = respuesta;
-
-    // Validación por coincidencia de cadena: si no hay rastro de fallos, se marca como conectado
     if (!respuesta.includes('Error')) this.conectado = true;
   }
 
-  /**
-   * Prepara la interfaz de usuario e inicia el flujo para la medición de la temperatura corporal (BT).
-   * Administra los estados de carga visuales y procesa de forma asíncrona el resultado
-   * devuelto por el servicio una vez finalizado el análisis del hardware.
-   */
   medirBT() {
-    // Configuración de estados iniciales en la interfaz para reflejar el inicio del proceso
     this.estadoBluetooth = 'iniciando medición...';
     this.midiendoBT = true;
     this.temperatura = null;
 
-    // Invocación del módulo de temperatura en el servicio pasándole el callback de resolución
     this.LTS.medicionTemperatura((resultado) => {
-      // Cuando el SDK tenga el dato lo procesa e imprime en la vista aquí
       this.midiendoBT = false;
       this.temperatura = Number(resultado);
       this.estadoBluetooth = 'Medición completada';
+
+      this.historial.guardarMedicion('temperatura', {
+        temperatura: this.temperatura,
+      });
     });
   }
 
-  /**
-   * Controla la interfaz de usuario para el proceso de oximetría (SpO2 y Pulso).
-   * Inicializa los paneles visuales, gestiona variables de retención temporal de datos
-   * y reacciona de forma asíncrona ante tres eventos clave del hardware:
-   * 1. Recepción de muestras de datos.
-   * 2. Cambios en el estado físico del dedo en el sensor (desconexión o estabilidad).
-   * 3. Consolidación de la medición al cumplirse el tiempo requerido.
-   */
   medirOX() {
-    // Inicialización de banderas de control en la UI para evitar colisiones entre paneles
     this.midiendoOX = true;
-    this.midiendoBT = false; // Aseguramos que el otro panel no interfiera
+    this.midiendoBT = false;
     this.spo2 = null;
     this.pulso = null;
-    this.dedoPuesto = true; // Reseteamos el estado del dedo
+    this.dedoPuesto = true;
     this.errorOxigeno = null;
     this.estadoBluetooth = 'Oxímetro activado. Esperando lectura...';
 
-    // Variables de almacenamiento transitorio para salvaguardar los datos hasta el cierre del ciclo (onEnd)
     let spo2Temp: number | null = null;
     let pulsoTemp: number | null = null;
-    // Invocación del flujo multicanal en el servicio (LTS)
+
     this.LTS.medicionOxigeno(
-      // Callback 1: Flujo continuo/final de datos brutos procesados
       (resultadoSpO2, resultadoPulso) => {
-        //this.midiendoOX = false;
         spo2Temp = resultadoSpO2;
         pulsoTemp = resultadoPulso;
       },
-      // Callback 2: Monitoreo en tiempo real de la presencia del dedo en el hardware
       (estaTocando) => {
         this.dedoPuesto = estaTocando;
         if (!estaTocando) {
-          // Interrupción abrupta: Limpieza total de los registros parciales para evitar falsos positivos
           this.midiendoOX = false;
           spo2Temp = null;
           pulsoTemp = null;
@@ -152,80 +155,58 @@ export class HomePage implements OnInit {
           this.errorOxigeno =
             'Medición interrumpida. Vuelva a intentarlo manteniendo el dedo apoyado.';
           this.estadoBluetooth = '⚠️ ¡Has levantado el dedo del sensor!';
-          console.log(this.estadoBluetooth, this.errorOxigeno);
         } else {
           this.estadoBluetooth = 'Midiendo oxígeno... Mantén el dedo apoyado.';
         }
         this.dedoPuesto = estaTocando;
-        this.cdr.detectChanges(); // Fuerza la renderización inmediata del aviso en el DOM de la vista
+        this.cdr.detectChanges();
       },
-      // Callback 3: Finalización del ciclo de tiempo requerido por el algoritmo
       () => {
         this.midiendoOX = false;
-        // Traspaso definitivo de los datos temporales a las variables enlazadas a la UI
         this.spo2 = spo2Temp;
         this.pulso = pulsoTemp;
         this.estadoBluetooth = 'Medición de Oxigeno completada';
-        console.log('[OX] onEnd ejecutado, midiendo OX: ', this.midiendoOX);
-        this.cdr.detectChanges(); // Refresca la vista con los resultados finales consolidados
+        this.cdr.detectChanges();
+
+        if (spo2Temp !== null && pulsoTemp !== null) {
+          this.historial.guardarMedicion('oxigeno', {
+            spo2: spo2Temp,
+            pulso: pulsoTemp,
+          });
+        }
       },
     );
   }
 
-  /**
-   * Solicita y monitoriza el estado de la batería y el modo de alimentación del dispositivo.
-   * Vincula los tres canales de respuesta del hardware (nivel, carga completa y estado de carga)
-   * directamente con las propiedades de la interfaz de usuario, forzando la actualización de la vista.
-   */
   consultarBateria() {
     this.LTS.medicionBateria(
-      // Callback 1: Actualización del nivel de porcentaje numérico de la batería
       (nivel) => {
         this.bateria = nivel;
         this.cargando = false;
-        this.cdr.detectChanges(); // Fuerza la actualización del DOM para reflejar el nuevo porcentaje
+        this.cdr.detectChanges();
       },
-      // Callback 2: Notificación asíncrona de carga completada al 100%
       () => {
         this.bateria = 100;
         this.cargando = false;
-        this.cdr.detectChanges(); // Refresca la vista para mostrar el estado lleno de la batería
+        this.cdr.detectChanges();
       },
-      // Callback 3: Cambio de estado físico en la alimentación (cable conectado/desconectado)
       (cargando) => {
         this.cargando = cargando;
-        this.cdr.detectChanges(); // Actualiza inmediatamente el icono de carga en la UI
+        this.cdr.detectChanges();
       },
     );
   }
 
-  /**
-   * Cancela la medición activa desde la interfaz de usuario.
-   * Invoca la parada de captura en el servicio (LTS), detiene los indicadores visuales
-   * de progreso (spinners) y notifica el estado de cancelación en la vista.
-   */
   cancelarMedicion() {
     this.LTS.cancelarMedicion();
-
-    // Apagamos todos los spinners e indicadores de progreso de los paneles activos
     this.midiendoOX = false;
     this.midiendoBP = false;
+    this.midiendoECG = false;
     this.estadoBluetooth = 'Medición cancelada.';
-
-    // Fuerza la actualización del DOM para reflejar de inmediato la parada del proceso
     this.cdr.detectChanges();
   }
 
-  /**
-   * Prepara la interfaz de usuario e inicia el proceso para la medición de la presión arterial (BP).
-   * Controla el ciclo de vida de los indicadores visuales (spinners) y gestiona de forma asíncrona
-   * las tres respuestas posibles del servicio de hardware:
-   * 1. Éxito: Almacena los valores de presión sistólica, diastólica y pulso.
-   * 2. Error: Captura y despliega el mensaje de fallo específico traducido por el servicio.
-   * 3. Interrupción: Maneja la finalización abrupta del proceso sin volcado de datos.
-   */
   medirBP() {
-    // Inicialización de estados de carga y limpieza de registros previos en la UI
     this.midiendoBP = true;
     this.presionSistolica = null;
     this.presionDiastolica = null;
@@ -233,30 +214,158 @@ export class HomePage implements OnInit {
     this.errorBP = null;
     this.estadoBluetooth = 'Midiendo presión arterial...';
 
-    // Invocación del módulo de presión en el servicio (LTS) pasando los tres canales de control
     this.LTS.medicionPresion(
-      // Callback 1: Recepción del resultado consolidado final con éxito
       (sistolica, diastolica, pulso) => {
         this.midiendoBP = false;
         this.presionSistolica = sistolica;
         this.presionDiastolica = diastolica;
         this.pulsoBP = pulso;
         this.estadoBluetooth = 'Medición de presión completada.';
-        this.cdr.detectChanges(); // Fuerza la renderización de los valores de tensión en la vista
+        this.cdr.detectChanges();
       },
-      // Callback 2: Recepción y gestión de errores físicos o de mala colocación del manguito
       (mensaje) => {
         this.midiendoBP = false;
         this.errorBP = mensaje;
         this.estadoBluetooth = 'Error en la medición de presión.';
-        this.cdr.detectChanges(); // Refresca la UI para mostrar el mensaje de alerta al usuario
+        this.cdr.detectChanges();
       },
-      // Callback 3: Finalización del ciclo de vida del proceso o interrupción del canal
       () => {
         this.midiendoBP = false;
         this.estadoBluetooth = 'Medición de presión interrumpida.';
-        this.cdr.detectChanges(); // Actualiza el estado visual para permitir un nuevo intento
+        this.cdr.detectChanges();
       },
     );
+  }
+
+  medirECG() {
+    this.midiendoECG = true;
+    this.errorECG = null;
+    this.puntosECG = [];
+    this.ecgAnimacionActiva = true;
+    this.estadoBluetooth =
+      'ECG activo. Mantenga los dedos sobre el electrodo...';
+    this.ecgHR = null;
+    this.ecgHRV = null;
+    this.dedoPuestoECG = true;
+
+    this.bucleECG();
+
+    setTimeout(() => {
+      const canvas = document.getElementById('canvasECG') as HTMLCanvasElement;
+      if (canvas) {
+        canvas.width = canvas.offsetWidth;
+      }
+    }, 100);
+
+    this.LTS.medicionECG(
+      (valor, muestra) => {
+        this.puntosECG.push(valor);
+      },
+      () => {
+        this.ecgAnimacionActiva = false;
+        this.midiendoECG = false;
+        this.puntosECG = [];
+        this.errorECG =
+          'Medición interrumpida. Mantenga los dedos sobre el electrodo durante 30 segundos.';
+        this.estadoBluetooth = 'ECG interrumpido.';
+        this.cdr.detectChanges();
+      },
+      () => {
+        this.ecgAnimacionActiva = false;
+        this.midiendoECG = false;
+        this.estadoBluetooth = 'ECG completado.';
+        this.cdr.detectChanges();
+      },
+      (metricas) => {
+        this.ecgHR = metricas.hr;
+        this.ecgHRV = metricas.hrv;
+
+        this.ecgAnimacionActiva = false;
+        this.cancelarMedicion();
+
+        this.historial.guardarMedicion('ecg', {
+          hr: metricas.hr,
+          hrv: metricas.hrv,
+        });
+      },
+      (tocando) => {
+        this.dedoPuestoECG = tocando;
+        this.cdr.detectChanges();
+      },
+    );
+  }
+
+  bucleECG() {
+    if (!this.ecgAnimacionActiva) return;
+
+    this.dibujarECG();
+
+    setTimeout(() => {
+      requestAnimationFrame(() => this.bucleECG());
+    }, 33);
+  }
+
+  dibujarECG() {
+    const canvas = document.getElementById('canvasECG') as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const ancho = canvas.width;
+    const alto = canvas.height;
+    const ventana = this.puntosECG.slice(-1200);
+
+    // Fondo blanco, a juego con las tarjetas
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, ancho, alto);
+
+    if (ventana.length < 2) return;
+
+    const max = ventana.reduce((a, b) => Math.max(a, b), -Infinity);
+    const min = ventana.reduce((a, b) => Math.min(a, b), Infinity);
+    const margen = (max - min) * 0.2;
+    const rango = max - min + margen * 2 || 1;
+    const ecgMin = min - margen;
+
+    // Cuadrícula gris clara, discreta sobre fondo blanco
+    ctx.strokeStyle = '#e5e5ea';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < ancho; x += 20) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, alto);
+      ctx.stroke();
+    }
+    for (let y = 0; y < alto; y += 20) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(ancho, y);
+      ctx.stroke();
+    }
+
+    // Onda ECG en rojo/rosa, color estándar de "corazón" en apps de salud iOS
+    ctx.strokeStyle = '#ff2d55';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    const pixelesPorPunto = ancho / ventana.length;
+
+    ventana.forEach((punto, i) => {
+      const y = alto - ((punto - ecgMin) / rango) * (alto * 0.8) - alto * 0.1;
+      const x = i * pixelesPorPunto;
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+
+    ctx.stroke();
+  }
+
+  async verHistorialDebug() {
+    const historial = await this.historial.obtenerHistorial();
+    console.log('[HISTORIAL COMPLETO]', historial);
   }
 }

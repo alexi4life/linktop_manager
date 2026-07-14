@@ -1,27 +1,206 @@
-#container {
+// ===== VARIABLES DE DISEÑO =====
+:host {
+  --color-fondo: #f2f2f7; // gris muy claro, estilo Apple Health
+  --color-tarjeta: #ffffff;
+  --color-texto-principal: #1c1c1e;
+  --color-texto-secundario: #8e8e93;
+  --radio-tarjeta: 20px;
+  --sombra-tarjeta: 0 2px 10px rgba(0, 0, 0, 0.06);
+  font-family:
+    "Quicksand",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+ion-content {
+  --background: var(--color-fondo);
+}
+
+// ===== CABECERA DE ESTADO BLUETOOTH =====
+.tarjeta-estado {
+  border-radius: var(--radio-tarjeta);
+  box-shadow: var(--sombra-tarjeta);
+  margin-bottom: 16px;
+
+  .texto-estado {
+    font-size: 0.9rem;
+    color: var(--color-texto-secundario);
+    text-align: center;
+  }
+}
+
+// ===== CUADRÍCULA DE TARJETAS DE SENSORES =====
+.cuadricula-sensores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+// ===== TARJETA INDIVIDUAL DE SENSOR (ESTILO APPLE HEALTH) =====
+.tarjeta-sensor {
+  background: var(--color-tarjeta);
+  border-radius: var(--radio-tarjeta);
+  box-shadow: var(--sombra-tarjeta);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
+  min-height: 140px;
 
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  &.tarjeta-ancha {
+    grid-column: 1 / -1; // ocupa las dos columnas
+  }
+
+  .cabecera-sensor {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+
+    ion-icon {
+      font-size: 1.3rem;
+    }
+
+    .nombre-sensor {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--color-texto-secundario);
+    }
+  }
+
+  .valor-sensor {
+    width: 100%;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--color-texto-principal);
+    line-height: 1.1;
+    margin-bottom: 8px;
+
+    &.valor-vacio {
+      color: var(--color-texto-secundario);
+      opacity: 0.4;
+    }
+
+    .unidad-sensor {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--color-texto-secundario);
+      margin-left: 4px;
+    }
+  }
+
+  .subtitulo-sensor {
+    font-size: 0.75rem;
+    color: var(--color-texto-secundario);
+    margin-top: 2px;
+  }
+
+  .boton-medir {
+    width: 100%;
+    margin-top: auto;
+    padding-top: 12px;
+  }
 }
 
-#container strong {
-  font-size: 20px;
-  line-height: 26px;
+// Colores de los iconos por sensor (el botón ya es uniforme, esto es solo el icono)
+.color-temperatura {
+  color: #ff9500;
+}
+.color-oxigeno {
+  color: #ff3b30;
+}
+.color-ecg {
+  color: #ff2d55;
+}
+.color-bateria {
+  color: #34c759;
+}
+.color-presion {
+  color: #5856d6;
 }
 
-#container p {
-  font-size: 16px;
-  line-height: 22px;
-
-  color: #8c8c8c;
-
+// ===== BOTÓN ÚNICO ESTILO iOS — mismo aspecto en todas las tarjetas =====
+.boton-ios {
+  --background: #007aff; // azul iOS estándar
+  --color: #ffffff;
+  --border-radius: 14px;
+  --box-shadow: none;
+  height: 44px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: none;
   margin: 0;
 }
 
-#container a {
-  text-decoration: none;
+// ===== MENSAJES DE ESTADO (dedo levantado, errores...) =====
+.mensaje-alerta {
+  width: 100%;
+  border-radius: 16px;
+  margin-top: 12px;
+  padding: 12px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+
+  &.alerta-advertencia {
+    background: #fff3cd;
+    color: #856404;
+  }
+
+  &.alerta-error {
+    background: #f8d7da;
+    color: #721c24;
+  }
+}
+
+// ===== CANVAS DEL ECG — fondo claro a juego con las tarjetas =====
+.contenedor-ecg {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e5e5ea;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-top: 12px;
+
+  canvas {
+    display: block;
+    width: 100%;
+  }
+
+  .nota-escala {
+    color: #8e8e93;
+    font-size: 0.65rem;
+    text-align: center;
+    margin: 4px 0;
+    background: #ffffff;
+  }
+}
+
+// ===== BOTÓN CANCELAR =====
+.boton-cancelar {
+  margin-top: 16px;
+}
+
+// ===== BOTÓN CANCELAR =====
+// Forzamos el estilo claro en la cabecera, igual sin importar el modo oscuro del sistema
+ion-header ion-toolbar {
+  --background: #ffffff;
+  --color: #1c1c1e;
+  --border-color: #e5e5ea;
+}
+
+// La tarjeta de estado también debe verse clara, a juego con el resto
+.tarjeta-estado {
+  --background: #ffffff;
+  --color: #1c1c1e;
+
+  .texto-estado {
+    color: var(--color-texto-secundario);
+  }
 }

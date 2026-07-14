@@ -22,8 +22,9 @@ const LINKTOP_UUIDS = {
 export class LinktopService {
   // Variables
   private dispositivoConectado: any = null;
-  private SDK: any = null; // Creamos la variable SDK para luego llamarla
-  private cancelado: boolean = false; // Creamos esta variable por si el usuario cancela la medición
+  private SDK: any = null;
+  private cancelado: boolean = false;
+  private datosObtenidosECG: boolean = false;
 
   constructor() {
     this.SDK = (window as any).default;
@@ -80,16 +81,8 @@ export class LinktopService {
            */
           onDataPost: async (data: any) => {
             // Formateo de bytes a Hexadecimal para facilitar la depuración en consola
-            console.log(
-              '[BLE-WRITE] Bytes:',
-              Array.from(new Uint8Array(data))
-                .map((b) => '0x' + b.toString(16).padStart(2, '0'))
-                .join(' '),
-            );
-            console.log(
-              '[SDK] onDataPost recibe datos, longitud:',
-              data?.length,
-            );
+            //console.log('[BLE-WRITE] Bytes:',Array.from(new Uint8Array(data)).map((b) => '0x' + b.toString(16).padStart(2, '0')).join(' '),);
+            //console.log('[SDK] onDataPost recibe datos, longitud:',data?.length,);
 
             if (this.dispositivoConectado) {
               try {
@@ -164,7 +157,7 @@ export class LinktopService {
         onResult: (temp: any) => {
           console.log('[BT] onResult temperatura:', temp);
           // Cuando el algoritmo del SDK termina con éxito, despacha el valor final al callback
-          this.SDK.unRegisterBPListener();
+          this.SDK.unRegisterBTListener();
           callback(temp);
         },
       });
@@ -192,6 +185,7 @@ export class LinktopService {
   ) {
     // Inicialización del cronómetro interno para validar el tiempo de exposición
     let tiempoInicio = Date.now();
+    this.cancelado = false;
 
     if (this.SDK && this.SDK.registerOXListener) {
       this.SDK.registerOXListener({
@@ -226,11 +220,8 @@ export class LinktopService {
             } else {
               // El usuario ha quitado el dedo muy rápido antes de consolidar la muestra
               if (onFingerChange) {
-                // FIXME - No funciona.
                 this.SDK.unRegisterOXListener();
                 onFingerChange(false);
-                // TODO - Hacer que cuando el usuario quite el dedo antes de tiempo salga un mensaje
-                // TODO - Hacer que cuando el usuario quite el dedo antes de tiempo no muestre los datos
               }
             }
           }
@@ -273,6 +264,7 @@ export class LinktopService {
    * @param onCargando - (Opcional) Callback que se activa al conectar o desconectar el dispositivo de la corriente.
    */
   medicionBateria(
+    // TODO - Al estar conectado no dice la batería
     onNivel: (nivel: number) => void,
     onCargaCompleta?: () => void,
     onCargando?: (cargando: boolean) => void,
@@ -317,15 +309,11 @@ export class LinktopService {
   async cancelarMedicion() {
     if (this.SDK && this.SDK.stopDetect) {
       this.cancelado = true;
-
-      // Paramos el procesamiento interno del SDK
       this.SDK.stopDetect();
       this.SDK.unRegisterOXListener();
       this.SDK.unRegisterBPListener();
+      this.SDK.unRegisterECGListener();
 
-      // Enviamos el comando de parada físico al dispositivo por BLE
-      // Bytes capturados de una medición natural de oxígeno completada
-      // TODO - Comprobar que funciona tambien para otras mediciones (solo OX por ahora)
       if (this.dispositivoConectado) {
         try {
           const comandoParada = new Uint8Array([
@@ -358,7 +346,7 @@ export class LinktopService {
    * @param onEnd - (Opcional) Callback de finalización (definido para el ciclo de vida del componente).
    */
   medicionPresion(
-    // TODO - queda probar esto
+    // TODO - queda probar esto (no se prueba porque hace mucho ruido)
     callback: (sistolica: number, diastolica: number, pulso: number) => void,
     onError?: (mensaje: string) => void,
     onEnd?: () => void,
@@ -414,6 +402,113 @@ export class LinktopService {
       this.SDK.startDetect('Blood Pressure');
     } else {
       console.log('Error: SDK o registerBPListener no están definidos');
+    }
+  }
+
+  // FIXME - Se intentó integrar NeuroSky (algoritmo linktop) para calcular HR, HRV, ánimo y
+  // frecuencia respiratoria a partir de la onda del ECG, siguiendo el ejemplo del manual
+  // y reconstruyendo nosotros mismos el parseo de bytes BLE crudos.
+  // Resultado: el HR de NeuroSky fue inconsistente en pruebas repetidas. Se descarta NeuroSky
+  // por falta de fiabilidad demostrada.
+
+  // TODO - Si se consigue documentación oficial del fabricante sobre la frecuencia de
+  // muestreo real del ADC y el formato exacto de "processBluetoothEcgData", reintentar
+  // NeuroSky para poder ofrecer ánimo y frecuencia respiratoria (no calculados por el SDK nativo).
+
+  /**
+   * Inicia la medición de ECG (electrocardiograma).
+   * Dibuja la onda en tiempo real a través de onFilterResult, y obtiene HR y HRV
+   * del cálculo nativo del propio SDK (onResult), que usa marcas de tiempo reales
+   * y no depende de ninguna frecuencia de muestreo asumida.
+   *
+   * @param onDato - Callback que recibe cada punto de la onda ECG en tiempo real (solo visual).
+   * @param onFingerOff - (Opcional) Callback si el usuario levanta los dedos antes de tiempo.
+   * @param onEnd - (Opcional) Callback cuando la medición completa con éxito.
+   * @param onMetricas - (Opcional) Callback que recibe HR y HRV nativos del SDK.
+   */
+  medicionECG(
+    onDato: (valor: number, muestra: number) => void,
+    onFingerOff?: () => void,
+    onEnd?: () => void,
+    onMetricas?: (metricas: { hr: number; hrv: number }) => void,
+    onDedoCambio?: (tocando: boolean) => void,
+  ) {
+    let tiempoInicio = 0;
+    this.datosObtenidosECG = false;
+
+    if (this.SDK && this.SDK.registerECGListener) {
+      this.SDK.registerECGListener({
+        onProcess: (process: any) => {
+          console.log('[ECG] onProcess:', process);
+
+          if (process === 0) {
+            tiempoInicio = Date.now();
+          }
+
+          if (process === 5) {
+            if (this.cancelado) {
+              this.cancelarMedicion();
+              this.cancelado = false;
+              return;
+            }
+
+            const segundosTranscurridos = (Date.now() - tiempoInicio) / 1000;
+            console.log('[ECG] Segundos transcurridos:', segundosTranscurridos);
+
+            // FIXME - Umbral de 30s heredado del patrón de oxígeno
+            if (segundosTranscurridos >= 30) {
+              this.cancelarMedicion();
+              if (onEnd) onEnd();
+            } else {
+              this.cancelarMedicion();
+              if (onFingerOff) onFingerOff();
+            }
+          }
+        },
+        // Dibuja la onda en tiempo real — callback descubierto por ingeniería inversa (Proxy),
+        // no documentado con este nombre en el manual, pero confirmado funcionando visualmente.
+        onFilterResult: (valor: number, muestra: number) => {
+          onDato(valor, muestra);
+        },
+        onFingerdetection: (detected: any) => {
+          console.log('[ECG] Dedo detectado:', detected);
+          if (onDedoCambio) onDedoCambio(detected);
+
+          // Contador para que no de error al iniciar medicion
+          const segundosDesdeInicio = (Date.now() - tiempoInicio) / 1000;
+
+          // Si se levanta el dedo paramos la medición
+          if (!detected && segundosDesdeInicio > 3) {
+            this.cancelarMedicion();
+            if (this.datosObtenidosECG) {
+              if (onEnd) onEnd();
+            } else {
+              if (onFingerOff) onFingerOff();
+            }
+          }
+        },
+        onRawData: () => {},
+        onException: () => {},
+        onLeadOff: () => {},
+        // Cálculo nativo del propio SDK — usa tiempos reales, no depende de frecuencia
+        // de muestreo asumida. Fuente fiable confirmada con pruebas repetidas (~53-54 ppm estable).
+        onResult: (resultado: any) => {
+          console.log('[ECG] onResult nativo del SDK:', resultado);
+          this.datosObtenidosECG = true;
+          if (onMetricas) {
+            onMetricas({
+              hr: resultado.hr,
+              hrv: resultado.hrv,
+            });
+          }
+        },
+        onHR: () => {},
+        onWave: () => {},
+      });
+
+      this.SDK.startDetect('Electrocardiogram');
+    } else {
+      console.log('Error: SDK o registerECGListener no están definidos');
     }
   }
 }
