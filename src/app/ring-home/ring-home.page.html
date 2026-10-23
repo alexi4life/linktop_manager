@@ -70,13 +70,16 @@
           </ng-template>
         </div>
         <div class="boton-medir">
+          <!-- Botón único: mide o, si ya está midiendo, detiene -->
           <ion-button
             expand="block"
             class="boton-ios"
-            (click)="measuringHRV()"
-            [disabled]="midiendo !== null"
-            >Medir HRV</ion-button
+            [class.boton-detener]="midiendo === 'pulso'"
+            (click)="midiendo === 'pulso' ? detenerMedicion() : measuringHRV()"
+            [disabled]="midiendo !== null && midiendo !== 'pulso'"
           >
+            {{ midiendo === 'pulso' ? 'Detener' : 'Medir HRV' }}
+          </ion-button>
         </div>
       </div>
 
@@ -101,10 +104,12 @@
           <ion-button
             expand="block"
             class="boton-ios"
-            (click)="measuringOX()"
-            [disabled]="midiendo !== null"
-            >Medir Oxígeno</ion-button
+            [class.boton-detener]="midiendo === 'oxigeno'"
+            (click)="midiendo === 'oxigeno' ? detenerMedicion() : measuringOX()"
+            [disabled]="midiendo !== null && midiendo !== 'oxigeno'"
           >
+            {{ midiendo === 'oxigeno' ? 'Detener' : 'Medir Oxígeno' }}
+          </ion-button>
         </div>
       </div>
 

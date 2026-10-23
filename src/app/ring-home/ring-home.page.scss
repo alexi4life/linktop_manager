@@ -231,6 +231,11 @@ ion-header ion-toolbar {
   font-weight: 600;
   text-transform: none;
   margin: 0;
+
+  // Mientras mide, el mismo botón sirve para detener (en rojo iOS)
+  &.boton-detener {
+    --background: #ff3b30;
+  }
 }
 
 .mensaje-alerta {

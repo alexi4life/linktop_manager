@@ -42,6 +42,13 @@ export class RingBluetooth {
   // Control de la descarga de históricos, para poder reconectar solos si el
   // anillo entra en reposo a mitad de la transferencia (ocurre cada ~30s)
   private descargandoHistoricos: boolean = false;
+
+  // Medición de salud en curso: guardamos el MISMO objeto listener registrado,
+  // porque el SDK solo lo da de baja si recibe exactamente ese objeto
+  private medicionSalud: {
+    listener: any;
+    cierre: 'closeHealth' | 'closeSingleHealth';
+  } | null = null;
   private ultimoDeviceId: string | null = null;
   private intentosReconexionHistoricos: number = 0; // Reconexiones hechas en la descarga actual
   private listenerHistoricos: any = null; // Mismo objeto registrado, necesario para poder darlo de baja
@@ -571,7 +578,11 @@ export class RingBluetooth {
             if (isClosing) return;
 
             countAttempts++;
-            console.log('Contador intentos: ', countAttempts);
+            // status: 0 sin empezar, 1 midiendo, 2 válido (manual 2.5.7).
+            // errCode no está documentado; se registra para poder estudiarlo
+            console.log(
+              `[SALUD] intento ${countAttempts} | status ${data?.status} | errCode ${data?.errCode}`,
+            );
 
             if (data && data.status == 2) {
               // Paso 1: descartamos valores físicamente imposibles en una persona
@@ -599,6 +610,7 @@ export class RingBluetooth {
                   if (esEstable) {
                     // Dos lecturas seguidas coinciden de verdad: la damos por buena
                     isClosing = true;
+                    this.medicionSalud = null;
                     this.healthData$.next(data);
                     SDK.default.unregisterHealthListener(healthListener);
                     await timemgt.sleep(300);
@@ -624,6 +636,7 @@ export class RingBluetooth {
             if (!isClosing && countAttempts >= 15) {
               console.warn('Demasiados intentos de comunicación');
               isClosing = true;
+              this.medicionSalud = null;
               SDK.default.unregisterHealthListener(healthListener);
               this.healthDataFallida$.next();
               const closeCmd =
@@ -635,12 +648,30 @@ export class RingBluetooth {
           },
         };
 
+        this.medicionSalud = {
+          listener: healthListener,
+          cierre: type === 'openSingleHealth' ? 'closeSingleHealth' : 'closeHealth',
+        };
         SDK.default.registerHealthListener(healthListener);
         await this.sendData(type);
       }
     } catch (error) {
       console.error('El error es: ', error);
     }
+  }
+
+  /**
+   * Detiene a petición del usuario la medición de salud en curso (pulso/HRV u
+   * oxígeno): da de baja su listener y manda al anillo el comando de cierre.
+   * El anillo no avisa si falta el dedo (el manual no lo documenta), así que
+   * esta es la forma de no esperar a que se agoten los intentos.
+   */
+  async detenerMedicionSalud(): Promise<void> {
+    if (!this.medicionSalud) return;
+    const { listener, cierre } = this.medicionSalud;
+    this.medicionSalud = null;
+    SDK.default.unregisterHealthListener(listener);
+    await this.sendData(cierre);
   }
 
   /**

@@ -114,6 +114,9 @@ export class LinktopService {
               if (segundosTranscurridos >= 30) {
                 if (this.oxigenoOnEnd) this.oxigenoOnEnd();
               } else {
+                // El SDK cambia de modo (p. ej. por otro startDetect) aunque el
+                // monitor siga midiendo: lo paramos para que app y aparato coincidan
+                this.cancelarMedicion('OX');
                 if (this.oxigenoOnInterrumpida) this.oxigenoOnInterrumpida();
               }
             }

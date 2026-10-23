@@ -623,6 +623,12 @@ export class RingHomePage implements OnInit {
     if (!enviado) this.finalizarMedicion();
   }
 
+  /** Detiene a petición del usuario la medición de pulso/HRV u oxígeno en curso. */
+  async detenerMedicion() {
+    await this.ringBLEservice.detenerMedicionSalud();
+    this.finalizarMedicion();
+  }
+
   /** Quita el indicador "Midiendo…" y, si se indica, muestra un error. */
   private finalizarMedicion(error: string | null = null) {
     clearTimeout(this.temporizadorMedicion);
