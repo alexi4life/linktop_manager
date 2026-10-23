@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
+import { Subject } from 'rxjs';
 
 //TODO - Por ahora el historial es local
 
@@ -23,6 +24,8 @@ export interface RegistroMedicion {
   providedIn: 'root',
 })
 export class HistorialService {
+  public datosActualizados$ = new Subject<void>();
+
   /**
    * Guarda una nueva medición en el almacén local del dispositivo.
    * Añade el registro al final de la lista existente, sin borrar nada anterior.
@@ -50,6 +53,7 @@ export class HistorialService {
       key: CLAVE_HISTORIAL,
       value: JSON.stringify(historial),
     });
+    this.datosActualizados$.next();
   }
 
   /**
@@ -60,6 +64,27 @@ export class HistorialService {
     const resultado = await Preferences.get({ key: CLAVE_HISTORIAL });
     if (!resultado.value) return [];
     return JSON.parse(resultado.value);
+  }
+
+  /**
+   * Recupera los registros de un tipo concreto, pero solo los que caen dentro
+   * de un rango de fechas. Útil para mostrar "última semana", "último mes", etc.
+   *
+   * @param tipo - Tipo de sensor a consultar.
+   * @param desde - Fecha de inicio del rango (inclusive).
+   * @param hasta - Fecha de fin del rango (inclusive). Si no se indica, se usa el momento actual.
+   */
+  async obtenerHistorialPorTipoYFecha(
+    tipo: RegistroMedicion['tipo'],
+    desde: Date,
+    hasta: Date = new Date(),
+  ): Promise<RegistroMedicion[]> {
+    const historial = await this.obtenerHistorial();
+    return historial.filter((registro) => {
+      if (registro.tipo !== tipo) return false;
+      const fechaRegistro = new Date(registro.fecha);
+      return fechaRegistro >= desde && fechaRegistro <= hasta;
+    });
   }
 
   /**

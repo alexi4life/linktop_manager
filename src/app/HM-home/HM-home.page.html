@@ -238,4 +238,61 @@
       Cancelar medición
     </ion-button>
   </div>
+
+  <!-- Selector de rango de fechas para las gráficas de datos guardados -->
+  <ion-segment
+    [(ngModel)]="rangoGraficasSeleccionado"
+    (ionChange)="cambiarRangoGraficas()"
+    class="segmento-rango"
+  >
+    <ion-segment-button value="24h"
+      ><ion-label>24h</ion-label></ion-segment-button
+    >
+    <ion-segment-button value="7d"
+      ><ion-label>7 días</ion-label></ion-segment-button
+    >
+    <ion-segment-button value="30d"
+      ><ion-label>30 días</ion-label></ion-segment-button
+    >
+    <ion-segment-button value="todo"
+      ><ion-label>Todo</ion-label></ion-segment-button
+    >
+  </ion-segment>
+
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">Temperatura</p>
+    <canvas id="graficaTemperatura"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">SpO2</p>
+    <canvas id="graficaSpo2"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">Pulso (Oxígeno)</p>
+    <canvas id="graficaPulsoOxigeno"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">Presión Sistólica</p>
+    <canvas id="graficaSistolica"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">Presión Diastólica</p>
+    <canvas id="graficaDiastolica"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">Pulso (Presión)</p>
+    <canvas id="graficaPulsoPresion"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">ECG - HR</p>
+    <canvas id="graficaEcgHR"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">ECG - HRV</p>
+    <canvas id="graficaEcgHRV"></canvas>
+  </div>
+  <div class="tarjeta-grafica">
+    <p class="titulo-grafica">Batería</p>
+    <canvas id="graficaBateria"></canvas>
+  </div>
 </ion-content>

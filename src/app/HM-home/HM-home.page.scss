@@ -204,3 +204,43 @@ ion-header ion-toolbar {
     color: var(--color-texto-secundario);
   }
 }
+// Cada gráfica de histórico en su propia tarjeta, con el mismo estilo
+.tarjeta-grafica {
+  background: var(--color-tarjeta);
+  border-radius: var(--radio-tarjeta);
+  box-shadow: var(--sombra-tarjeta);
+  padding: 16px;
+  margin-bottom: 12px;
+
+  .titulo-grafica {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-texto-secundario);
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  canvas {
+    width: 100% !important;
+  }
+}
+
+// Selector de rango de fechas (24h/7d/30d/Todo), con el mismo estilo iOS
+// que el resto de la app en vez del gris por defecto de Ionic
+.segmento-rango {
+  --background: #e5e5ea;
+  border-radius: 12px;
+  margin-bottom: 16px;
+
+  ion-segment-button {
+    --color: #8e8e93;
+    --color-checked: #ffffff;
+    --background-checked: #007aff;
+    --indicator-color: transparent; // el fondo azul ya hace de indicador
+    font-family: "Quicksand", sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: none;
+    min-height: 32px;
+  }
+}

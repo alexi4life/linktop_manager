@@ -1,0 +1,427 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>NexRing</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <!-- Estado de conexión -->
+  <ion-card class="tarjeta-estado">
+    <ion-card-content class="ion-text-center">
+      <p class="texto-estado">
+        {{ connected ? '🟢 Conectado' : (hasRing ? '⚪ En reposo (ahorro de
+        batería)' : 'Sin anillo vinculado') }}
+      </p>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Pantalla de conexión inicial -->
+  <!-- Botón para vincular por primera vez (nunca ha habido anillo vinculado) -->
+  <div *ngIf="!hasRing" class="ion-text-center ion-margin-top">
+    <ion-button expand="block" class="boton-ios" (click)="search4ring()">
+      Buscar y Conectar Anillo
+    </ion-button>
+  </div>
+
+  <!-- Botón para reconectar a mano: aparece cuando hay anillo vinculado pero
+     no está conectado ahora mismo (por ejemplo, si la reconexión automática
+     falló por limitaciones del navegador) -->
+  <div *ngIf="hasRing && !connected" class="ion-text-center ion-margin-top">
+    <ion-button expand="block" class="boton-ios" (click)="search4ring()">
+      Reconectar Anillo
+    </ion-button>
+  </div>
+
+  <!-- El resto del contenido (gráficas y tarjetas) se muestra siempre que haya
+     habido alguna vez un anillo vinculado, esté conectado ahora mismo o no -->
+  <div *ngIf="hasRing">
+    ...
+    <div class="cuadricula-sensores">
+      <!-- Pulso y HRV -->
+      <div class="tarjeta-sensor">
+        <div class="cabecera-sensor">
+          <ion-icon name="heart-outline" class="color-pulso"></ion-icon>
+          <span class="nombre-sensor">Pulso</span>
+        </div>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="pulso === '---' || pulso === '--'"
+        >
+          {{ pulso }}<span class="unidad-sensor">bpm</span>
+        </div>
+        <div class="boton-medir">
+          <ion-button expand="block" class="boton-ios" (click)="measuringHRV()"
+            >Medir HRV</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Oxígeno -->
+      <div class="tarjeta-sensor">
+        <div class="cabecera-sensor">
+          <ion-icon name="water-outline" class="color-oxigeno"></ion-icon>
+          <span class="nombre-sensor">Oxígeno</span>
+        </div>
+        <div class="valor-sensor" [class.valor-vacio]="oxigeno === '--'">
+          {{ oxigeno }}<span class="unidad-sensor">%</span>
+        </div>
+        <div class="boton-medir">
+          <ion-button expand="block" class="boton-ios" (click)="measuringOX()"
+            >Medir Oxígeno</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Temperatura -->
+      <div class="tarjeta-sensor">
+        <div class="cabecera-sensor">
+          <ion-icon
+            name="thermometer-outline"
+            class="color-temperatura"
+          ></ion-icon>
+          <span class="nombre-sensor">Temperatura</span>
+        </div>
+        <div class="valor-sensor" [class.valor-vacio]="temperatura === '--'">
+          {{ temperatura }}<span class="unidad-sensor">°C</span>
+        </div>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="fingerTemperature()"
+            >Medir</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Batería -->
+      <div class="tarjeta-sensor">
+        <div class="cabecera-sensor">
+          <ion-icon
+            name="battery-half-outline"
+            class="color-bateria"
+          ></ion-icon>
+          <span class="nombre-sensor">Batería</span>
+        </div>
+        <div class="valor-sensor" [class.valor-vacio]="bateria === '---'">
+          {{ bateria }}<span class="unidad-sensor">%</span>
+        </div>
+        <p class="subtitulo-sensor" *ngIf="estadobateria !== '--'">
+          {{ estadobateria }}
+        </p>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="measuringBattery()"
+            >Consultar</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Pasos y calorías -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon name="walk-outline" class="color-pasos"></ion-icon>
+          <span class="nombre-sensor">Actividad de Hoy</span>
+        </div>
+        <div class="valor-sensor" [class.valor-vacio]="steps === '--'">
+          {{ steps }}<span class="unidad-sensor">pasos</span> &nbsp;&nbsp; {{
+          calories }}<span class="unidad-sensor">kcal</span>
+        </div>
+        <div class="boton-medir">
+          <ion-button expand="block" class="boton-ios" (click)="dailyActivity()"
+            >Actualizar</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Modo deporte -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon name="bicycle-outline" class="color-pasos"></ion-icon>
+          <span class="nombre-sensor">Modo Deporte</span>
+        </div>
+        <div class="valor-sensor" [class.valor-vacio]="!isSportMode">
+          {{ isSportMode ? 'Activo' : '—' }}
+        </div>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="toggleSportMode()"
+          >
+            {{ isSportMode ? 'Detener' : 'Iniciar' }}
+          </ion-button>
+        </div>
+      </div>
+
+      <!-- Sueño -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon name="moon-outline" class="color-sueno"></ion-icon>
+          <span class="nombre-sensor">Análisis de Sueño</span>
+        </div>
+        <div class="valor-sensor" [class.valor-vacio]="deepSleepTime === '--'">
+          <ng-container *ngIf="deepSleepTime !== '--'; else vacioSueno">
+            {{ deepSleepTime }}<span class="unidad-sensor">profundo</span>
+            &nbsp;{{ lightSleepTime }}<span class="unidad-sensor">ligero</span>
+            &nbsp;{{ REMsleepTime }}<span class="unidad-sensor">REM</span>
+          </ng-container>
+          <ng-template #vacioSueno>—</ng-template>
+        </div>
+        <div class="boton-medir">
+          <ion-button expand="block" class="boton-ios" (click)="sleepdata()"
+            >Analizar Sueño</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Pulso en reposo -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon name="pulse-outline" class="color-reposo"></ion-icon>
+          <span class="nombre-sensor">Pulso en Reposo</span>
+        </div>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="restingHeartRate === '--'"
+        >
+          {{ restingHeartRate }}<span
+            class="unidad-sensor"
+            *ngIf="restingHeartRate !== '--'"
+            >bpm</span
+          >
+        </div>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="calculateRestingHeartRate()"
+            >Calcular</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Info del dispositivo -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon
+            name="information-circle-outline"
+            class="color-info"
+          ></ion-icon>
+          <span class="nombre-sensor">Información del Dispositivo</span>
+        </div>
+        <div class="valor-sensor lista-info-dispositivo">
+          <div class="fila-info">
+            <span class="etiqueta-info">MAC</span>
+            <span class="dato-info">{{ bleAddress }}</span>
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Versión</span>
+            <span class="dato-info">{{ deviceVer }}</span>
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">SN</span>
+            <span class="dato-info">{{ sn }}</span>
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Vinculación</span>
+            <span class="dato-info">{{ bindStatus }}</span>
+          </div>
+          <!-- Frecuencia de muestreo (samplingRate) oculta: según el manual (2.5.28), este valor
+         solo tiene sentido como parámetro de configuración del ECG (2=1024Hz, 3=512Hz),
+         no como una medición en vivo. Como no implementamos ECG, mostrarla confunde. -->
+          <!--
+    <div class="fila-info">
+      <span class="etiqueta-info">Frecuencia muestreo</span>
+      <span class="dato-info">{{ samplingRate }}</span>
+    </div>
+    -->
+          <div class="fila-info">
+            <span class="etiqueta-info">Tiempo medición pulso</span>
+            <span class="dato-info">{{ hrMeasurementTime }} s</span>
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Intervalo oxígeno</span>
+            <span class="dato-info">{{ oxMeasurementInterval }} min</span>
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Oxígeno automático</span>
+            <span class="dato-info">{{ oxMeasurementSwitch }}</span>
+          </div>
+        </div>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="measuringInfoDevice1()"
+            >Actualizar Info 1</ion-button
+          >
+          <ion-button
+            expand="block"
+            class="boton-ios ion-margin-top"
+            (click)="measuringInfoDevice2()"
+            >Actualizar Info 2</ion-button
+          >
+          <ion-button
+            expand="block"
+            class="boton-ios ion-margin-top"
+            (click)="measuringInfoDevice5()"
+            >Actualizar Info 5</ion-button
+          >
+        </div>
+      </div>
+    </div>
+    <div class="tarjeta-sensor tarjeta-ancha">
+      <!-- Selector de intervalo + interruptor, en la misma fila -->
+      <div class="fila-info fila-selector">
+        <div class="cabecera-info">
+          <ion-icon
+            name="information-circle-outline"
+            class="color-info"
+          ></ion-icon>
+          <span class="nombre-info">Medición oxígeno nocturna</span>
+        </div>
+        <div class="grupo-selector-switch">
+          <ion-select
+            [(ngModel)]="intervaloOxigenoSeleccionado"
+            interface="popover"
+            class="select-ios"
+            [interfaceOptions]="{ cssClass: 'popover-oxigeno' }"
+          >
+            <ion-select-option [value]="5">5 min</ion-select-option>
+            <ion-select-option [value]="10">10 min</ion-select-option>
+            <ion-select-option [value]="15">15 min</ion-select-option>
+            <ion-select-option [value]="30">30 min</ion-select-option>
+            <ion-select-option [value]="60">60 min</ion-select-option>
+            <ion-select-option [value]="120">120 min</ion-select-option>
+          </ion-select>
+
+          <ion-toggle
+            [(ngModel)]="oxAutomaticoActivo"
+            (ionChange)="cambiarEstadoOxigenoAutomatico()"
+            class="switch-ios"
+          ></ion-toggle>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTÓRICOS — una gráfica por variable, siempre visibles -->
+
+    <ion-segment
+      [(ngModel)]="rangoGraficasSeleccionado"
+      (ionChange)="cambiarRangoGraficas()"
+      class="segmento-rango"
+    >
+      <ion-segment-button value="24h">
+        <ion-label>24h</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="7d">
+        <ion-label>7 días</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="30d">
+        <ion-label>30 días</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="todo">
+        <ion-label>Todo</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">Pulso</p>
+      <canvas id="graficaHeartRate"></canvas>
+    </div>
+
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">HRV</p>
+      <canvas id="graficaHRV"></canvas>
+    </div>
+
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">Oxígeno en Sangre</p>
+      <canvas id="graficaOx"></canvas>
+    </div>
+
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">Temperatura</p>
+      <canvas id="graficaTemperature"></canvas>
+    </div>
+
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">Pasos</p>
+      <canvas id="graficaStep"></canvas>
+    </div>
+
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">Movimiento</p>
+      <canvas id="graficaMotion"></canvas>
+    </div>
+
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">Batería</p>
+      <canvas id="graficaBatteryLevel"></canvas>
+    </div>
+
+    <div class="tarjeta-grafica">
+      <p class="titulo-grafica">Evolución Pulso en Reposo</p>
+      <div style="position: relative; height: 30vh; width: 100%">
+        <canvas id="graficaRestingHR"></canvas>
+      </div>
+    </div>
+
+    <!-- Control del dispositivo -->
+    <ion-button
+      expand="block"
+      fill="outline"
+      color="danger"
+      (click)="clearHistData()"
+      class="ion-margin-top"
+    >
+      Limpiar históricos
+    </ion-button>
+    <ion-button
+      expand="block"
+      fill="outline"
+      color="danger"
+      (click)="restoreFactorySettings()"
+      class="ion-margin-top"
+    >
+      Restaurar ajustes de fábrica
+    </ion-button>
+    <ion-button
+      expand="block"
+      fill="outline"
+      color="danger"
+      (click)="deviceRestart()"
+      class="ion-margin-top"
+    >
+      Reiniciar dispositivo
+    </ion-button>
+    <ion-button
+      expand="block"
+      fill="outline"
+      color="danger"
+      (click)="shutdown()"
+      class="ion-margin-top"
+    >
+      Apagar
+    </ion-button>
+    <ion-button
+      expand="block"
+      fill="outline"
+      color="danger"
+      (click)="disconnecting()"
+      class="ion-margin-top"
+    >
+      Desconectar
+    </ion-button>
+    <ion-button
+      expand="block"
+      color="danger"
+      (click)="unbinding()"
+      class="ion-margin-top"
+    >
+      Desvincular
+    </ion-button>
+  </div>
+</ion-content>

@@ -1,0 +1,291 @@
+:host {
+  --color-fondo: #f2f2f7;
+  --color-tarjeta: #ffffff;
+  --color-texto-principal: #1c1c1e;
+  --color-texto-secundario: #8e8e93;
+  --radio-tarjeta: 20px;
+  --sombra-tarjeta: 0 2px 10px rgba(0, 0, 0, 0.06);
+
+  font-family:
+    "Quicksand",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+.lista-info-dispositivo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 400;
+}
+
+.fila-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e5e5ea; // misma línea gris que ya usas en la cuadrícula del ECG
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.fila-selector {
+  align-items: center; // centra verticalmente la etiqueta con el desplegable
+}
+
+.select-ios {
+  --placeholder-color: #8e8e93;
+  font-family: "Quicksand", sans-serif; // misma fuente que el resto de la app
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #007aff; // mismo azul que usas en los botones, para que destaque como "elemento interactivo"
+  max-width: 60%; // evita que el desplegable empuje la etiqueta fuera de la fila
+}
+
+.etiqueta-info {
+  font-size: 0.85rem;
+  color: #8e8e93; // gris iOS típico para etiquetas secundarias
+}
+.fila-selector {
+  // Anulamos el space-between de .fila-info: aquí no queremos etiqueta a un lado
+  // y valor al otro, sino todo centrado y apilado
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+
+  .etiqueta-info {
+    text-align: center; // por si el texto ocupa más de una línea
+  }
+}
+
+.grupo-selector-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center; // centra el selector y el switch como grupo
+  gap: 10px;
+}
+
+.switch-ios {
+  --background-checked: #34c759;
+}
+
+.dato-info {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1c1c1e;
+  text-align: right;
+}
+
+ion-content {
+  --background: var(--color-fondo);
+}
+
+ion-header ion-toolbar {
+  --background: #ffffff;
+  --color: #1c1c1e;
+  --border-color: #e5e5ea;
+}
+
+.tarjeta-estado {
+  --background: #ffffff;
+  --color: #1c1c1e;
+  border-radius: var(--radio-tarjeta);
+  box-shadow: var(--sombra-tarjeta);
+  margin-bottom: 16px;
+
+  .texto-estado {
+    font-size: 0.9rem;
+    color: var(--color-texto-secundario);
+    text-align: center;
+  }
+}
+
+.cuadricula-sensores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tarjeta-sensor {
+  background: var(--color-tarjeta);
+  border-radius: var(--radio-tarjeta);
+  box-shadow: var(--sombra-tarjeta);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-height: 140px;
+
+  &.tarjeta-ancha {
+    grid-column: 1 / -1;
+  }
+
+  .cabecera-sensor {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+
+    ion-icon {
+      font-size: 1.3rem;
+    }
+
+    .nombre-sensor {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--color-texto-secundario);
+    }
+  }
+
+  .cabecera-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    .nombre-info {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--color-texto-secundario);
+    }
+  }
+
+  .valor-sensor {
+    width: 100%;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--color-texto-principal);
+    line-height: 1.1;
+    margin-bottom: 8px;
+
+    &.valor-vacio {
+      color: var(--color-texto-secundario);
+      opacity: 0.4;
+    }
+
+    .unidad-sensor {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--color-texto-secundario);
+      margin-left: 4px;
+    }
+  }
+
+  .subtitulo-sensor {
+    font-size: 0.75rem;
+    color: var(--color-texto-secundario);
+    margin-top: 2px;
+  }
+
+  .boton-medir {
+    width: 100%;
+    margin-top: auto;
+    padding-top: 12px;
+  }
+}
+
+.color-pulso {
+  color: #ff3b30;
+}
+.color-oxigeno {
+  color: #007aff;
+}
+.color-hrv {
+  color: #ff2d55;
+}
+.color-temperatura {
+  color: #ff9500;
+}
+.color-bateria {
+  color: #34c759;
+}
+.color-pasos {
+  color: #5856d6;
+}
+.color-sueno {
+  color: #5856d6;
+}
+.color-reposo {
+  color: #ff3b30;
+}
+.color-info {
+  color: #8e8e93;
+}
+
+.boton-ios {
+  --background: #007aff;
+  --color: #ffffff;
+  --border-radius: 14px;
+  --box-shadow: none;
+  height: 44px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: none;
+  margin: 0;
+}
+
+.mensaje-alerta {
+  width: 100%;
+  border-radius: 16px;
+  margin-top: 12px;
+  padding: 12px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  background: #fff3cd;
+  color: #856404;
+}
+
+// Cada gráfica de histórico en su propia tarjeta, con el mismo estilo
+.tarjeta-grafica {
+  background: var(--color-tarjeta);
+  border-radius: var(--radio-tarjeta);
+  box-shadow: var(--sombra-tarjeta);
+  padding: 16px;
+  margin-bottom: 12px;
+
+  .titulo-grafica {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-texto-secundario);
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  canvas {
+    width: 100% !important;
+  }
+}
+
+// Selector de rango de fechas (24h/7d/30d/Todo), con el mismo estilo iOS
+// que el resto de la app en vez del gris por defecto de Ionic
+.segmento-rango {
+  --background: #e5e5ea;
+  border-radius: 12px;
+  margin-bottom: 16px;
+
+  ion-segment-button {
+    --color: #8e8e93;
+    --color-checked: #ffffff;
+    --background-checked: #007aff;
+    --indicator-color: transparent;
+    font-family: "Quicksand", sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: none;
+    min-height: 32px;
+  }
+}
+
+.boton-cancelar {
+  margin-top: 16px;
+}

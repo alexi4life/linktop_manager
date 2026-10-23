@@ -16,6 +16,16 @@ const LINKTOP_UUIDS = {
   DEV_INFO_SOFTWARE_REV_UUID: '00002a28-0000-1000-8000-00805f9b34fb',
 };
 
+// Tipos de medición, tal como los define el manual oficial del HC03 (sección 2.3.2)
+const Detection = {
+  BP: 'Blood Pressure',
+  BT: 'Blood Temperature',
+  BG: 'Blood Glucose',
+  OX: 'Blood Oxygen',
+  ECG: 'Electrocardiogram',
+  BATTERY: 'Battery',
+};
+
 @Injectable({
   providedIn: 'root',
 })
@@ -25,6 +35,13 @@ export class LinktopService {
   private SDK: any = null;
   private cancelado: boolean = false;
   private datosObtenidosECG: boolean = false;
+  private medicionECGFinalizando: boolean = false; // Evita llamar a cancelarMedicion() varias veces en bucle
+  // Variables para parar el funcionamiento de la medida de oxigeno
+  private medicionOXFinalizando: boolean = false; // Mismo control único que en ECG
+  private oxigenoActivo: boolean = false; // Si hay una medición de oxígeno en curso ahora mismo
+  private oxigenoTiempoInicio: number = 0;
+  private oxigenoOnEnd: (() => void) | null = null;
+  private oxigenoOnFingerChange: ((atendido: boolean) => void) | null = null;
 
   constructor() {
     this.SDK = (window as any).default;
@@ -71,6 +88,28 @@ export class LinktopService {
         const appInterface = {
           onModeChange: (mode: any) => {
             console.log('[SDK] Modo cambiado: ', mode);
+
+            // Respaldo confirmado necesario: en este dispositivo, onProcess nunca llega
+            // a 5 para oxígeno (visto en logs reales) -- el aviso real de que el sensor
+            // terminó llega aquí, cuando el modo pasa a null
+            if (
+              mode === null &&
+              this.oxigenoActivo &&
+              !this.medicionOXFinalizando
+            ) {
+              this.medicionOXFinalizando = true;
+              this.oxigenoActivo = false;
+
+              const segundosTranscurridos =
+                (Date.now() - this.oxigenoTiempoInicio) / 1000;
+
+              if (segundosTranscurridos >= 30) {
+                if (this.oxigenoOnEnd) this.oxigenoOnEnd();
+              } else {
+                if (this.oxigenoOnFingerChange)
+                  this.oxigenoOnFingerChange(false);
+              }
+            }
           },
           onException: (error: any) => {
             console.log('[SDK] Excepción global:', error);
@@ -81,9 +120,6 @@ export class LinktopService {
            */
           onDataPost: async (data: any) => {
             // Formateo de bytes a Hexadecimal para facilitar la depuración en consola
-            //console.log('[BLE-WRITE] Bytes:',Array.from(new Uint8Array(data)).map((b) => '0x' + b.toString(16).padStart(2, '0')).join(' '),);
-            //console.log('[SDK] onDataPost recibe datos, longitud:',data?.length,);
-
             if (this.dispositivoConectado) {
               try {
                 await BleClient.write(
@@ -141,21 +177,15 @@ export class LinktopService {
    * @param callback - Función de retorno que recibe el resultado final de la temperatura una vez concluido el análisis.
    */
   medicionTemperatura(callback: (resultado: any) => void) {
-    const Detection = {
-      BT: 'Blood Temperature',
-    };
-
     if (this.SDK && this.SDK.registerBTListener) {
       this.SDK.registerBTListener({
         onProcess: (process: any) => {
           // El SDK informa del progreso mediante un estado numérico de control (ej. 0, 1, 2...)
-          console.log('SDK informa estado de temperatura: ', process);
         },
         onException: (error: any) => {
           console.log('ERROR DE EXCEPCION EN SDK: ', error);
         },
         onResult: (temp: any) => {
-          console.log('[BT] onResult temperatura:', temp);
           // Cuando el algoritmo del SDK termina con éxito, despacha el valor final al callback
           this.SDK.unRegisterBTListener();
           callback(temp);
@@ -183,71 +213,68 @@ export class LinktopService {
     onFingerChange?: (atendido: boolean) => void,
     onEnd?: () => void,
   ) {
-    // Inicialización del cronómetro interno para validar el tiempo de exposición
     let tiempoInicio = Date.now();
     this.cancelado = false;
+    this.medicionOXFinalizando = false; // Se reinicia al empezar cada medición nueva
+
+    // Guardamos el contexto para que onModeChange (registrado en escanearConectar)
+    // pueda usarlo como respaldo si onProcess nunca avisa del final
+    this.oxigenoActivo = true;
+    this.oxigenoTiempoInicio = tiempoInicio;
+    this.oxigenoOnEnd = onEnd ?? null;
+    this.oxigenoOnFingerChange = onFingerChange ?? null;
 
     if (this.SDK && this.SDK.registerOXListener) {
       this.SDK.registerOXListener({
         onProcess: (process: any) => {
-          console.log('[SDK-OX] Estado numérico del proceso:', process);
-          // if (process === 5 && onEnd) onEnd();
+          // Control único: si ya cerramos esta medición, ignoramos cualquier
+          // aviso posterior, venga una vez o se repita varias veces
+          if (this.medicionOXFinalizando) return;
 
           if (process === 0) {
-            // El estado 0 indica el reinicio del ciclo de lectura del sensor
             tiempoInicio = Date.now();
+            this.oxigenoTiempoInicio = tiempoInicio;
           }
 
           if (process === 5) {
-            // Control de interrupción manual de la medición
             if (this.cancelado) {
+              this.medicionOXFinalizando = true;
+              this.oxigenoActivo = false;
               this.cancelado = false;
-              this.SDK.stopDetect('OX');
+              this.SDK.stopDetect('Blood Oxygen');
               return;
             }
 
             const segundosTranscurridos = (Date.now() - tiempoInicio) / 1000;
-            console.log(
-              '[SDK-OX] Segundos transcurridos: ',
-              segundosTranscurridos,
-            );
 
-            // Validación: El hardware exige un umbral de 30 segundos para una lectura estable
+            this.medicionOXFinalizando = true;
+            this.oxigenoActivo = false;
+
             if (segundosTranscurridos >= 30) {
-              // Ha finalizado la medición con éxito
               this.SDK.unRegisterOXListener();
               if (onEnd) onEnd();
             } else {
-              // El usuario ha quitado el dedo muy rápido antes de consolidar la muestra
-              if (onFingerChange) {
-                this.SDK.unRegisterOXListener();
-                onFingerChange(false);
-              }
+              this.SDK.unRegisterOXListener();
+              if (onFingerChange) onFingerChange(false);
             }
           }
         },
         onException: (error: any) => {
           console.log('[SDK-OX] Excepción en oxímetro:', error);
         },
-        onRawResult: (red: any, ir: any) => {
-          // console.log('[SDK-OX] Datos de onda en tiempo real recibidos');
-        },
+        onRawResult: (red: any, ir: any) => {},
         onFinger: (isTouch: boolean) => {
-          // Evento directo del hardware que detecta la presencia/ausencia del dedo
-          // console.log(`[SDK-OX] Dedo detectado: ${isTouch}`);
+          // Igual que en ECG: si ya cerramos, no reaccionamos a más avisos
+          if (this.medicionOXFinalizando) return;
           if (onFingerChange) {
             onFingerChange(isTouch);
           }
         },
         onResult: (spo2: any, hr: any) => {
-          // Despacho de resultados finales tipados numéricamente hacia la aplicación
-          // console.log(`[SDK-OX] ¡Lectura completada! SpO2: ${spo2}%, Pulso: ${hr} ppm`,);
-          //this.SDK.unRegisterOXListener();
           callback(Number(spo2), Number(hr));
         },
       });
 
-      // Ordenamos al motor arrancar el módulo de Oxígeno
       this.SDK.startDetect('Blood Oxygen');
     } else {
       console.log('Error: SDK o registerOXListener no están definidos');
@@ -264,32 +291,27 @@ export class LinktopService {
    * @param onCargando - (Opcional) Callback que se activa al conectar o desconectar el dispositivo de la corriente.
    */
   medicionBateria(
-    // TODO - Al estar conectado no dice la batería
     onNivel: (nivel: number) => void,
     onCargaCompleta?: () => void,
     onCargando?: (cargando: boolean) => void,
   ) {
     if (this.SDK && this.SDK.registerBatteryListener) {
       this.SDK.registerBatteryListener({
-        onProcess: (process: any) => {
-          console.log('[BATTERY] onProcess:', process);
-        },
+        onProcess: (process: any) => {},
         onException: (error: any) => {
           console.log('[BATTERY] Error:', error);
         },
-        // El SDK devuelve el porcentaje de energía remanente (escala 0 - 100)
         onPowerResult: (data: any) => {
-          console.log('[BATTERY] Nivel:', data);
+          // El SDK devuelve el porcentaje de energía remanente (escala 0 - 100)
+          this.SDK.unRegisterBatteryListener();
           onNivel(Number(data));
         },
-        // Evento de control disparado de forma asíncrona cuando llega al tope de carga
         onPowerFull: () => {
-          console.log('[BATTERY] Carga completa');
+          // Evento de control disparado de forma asíncrona cuando llega al tope de carga
           if (onCargaCompleta) onCargaCompleta();
         },
-        // Notifica si el cable de alimentación ha sido conectado o retirado
         onPowerChange: (cargando: boolean) => {
-          console.log('[BATTERY] Batería cambiada, args', cargando);
+          // Notifica si el cable de alimentación ha sido conectado o retirado
           if (onCargando) onCargando(cargando);
         },
       });
@@ -306,10 +328,10 @@ export class LinktopService {
    * Detiene la captura de datos en ejecución y elimina el registro de los escuchadores
    * (listeners) de oxígeno y presión arterial para liberar los recursos de comunicación.
    */
-  async cancelarMedicion() {
+  async cancelarMedicion(tipo: 'OX' | 'BP' | 'BG' | 'BT' | 'ECG' | 'BATTERY') {
     if (this.SDK && this.SDK.stopDetect) {
       this.cancelado = true;
-      this.SDK.stopDetect();
+      this.SDK.stopDetect(Detection[tipo]);
       this.SDK.unRegisterOXListener();
       this.SDK.unRegisterBPListener();
       this.SDK.unRegisterECGListener();
@@ -325,13 +347,10 @@ export class LinktopService {
             LINKTOP_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE,
             new DataView(comandoParada.buffer),
           );
-          console.log('[SDK] Comando de parada físico enviado al dispositivo');
         } catch (error) {
           console.error('[SDK] Error al enviar comando de parada:', error);
         }
       }
-
-      console.log('[SDK] Medición cancelada por el usuario');
     }
   }
 
@@ -435,51 +454,53 @@ export class LinktopService {
   ) {
     let tiempoInicio = 0;
     this.datosObtenidosECG = false;
+    this.medicionECGFinalizando = false; // Se reinicia al empezar cada medición nueva
 
     if (this.SDK && this.SDK.registerECGListener) {
       this.SDK.registerECGListener({
         onProcess: (process: any) => {
-          console.log('[ECG] onProcess:', process);
+          // Control único: si ya hemos cerrado esta medición, ignoramos cualquier
+          // aviso posterior del SDK (venga una vez o se repita varias veces)
+          if (this.medicionECGFinalizando) return;
 
           if (process === 0) {
             tiempoInicio = Date.now();
           }
 
           if (process === 5) {
+            this.medicionECGFinalizando = true; // Cerramos aquí mismo, antes de hacer nada más
+
             if (this.cancelado) {
-              this.cancelarMedicion();
               this.cancelado = false;
+              this.cancelarMedicion('ECG');
               return;
             }
 
             const segundosTranscurridos = (Date.now() - tiempoInicio) / 1000;
-            console.log('[ECG] Segundos transcurridos:', segundosTranscurridos);
+            this.cancelarMedicion('ECG');
 
-            // FIXME - Umbral de 30s heredado del patrón de oxígeno
             if (segundosTranscurridos >= 30) {
-              this.cancelarMedicion();
               if (onEnd) onEnd();
             } else {
-              this.cancelarMedicion();
               if (onFingerOff) onFingerOff();
             }
           }
         },
-        // Dibuja la onda en tiempo real — callback descubierto por ingeniería inversa (Proxy),
-        // no documentado con este nombre en el manual, pero confirmado funcionando visualmente.
         onFilterResult: (valor: number, muestra: number) => {
           onDato(valor, muestra);
         },
         onFingerdetection: (detected: any) => {
-          console.log('[ECG] Dedo detectado:', detected);
+          // Mismo control único aquí -- si ya cerramos, no repetimos nada
+          if (this.medicionECGFinalizando) return;
+
           if (onDedoCambio) onDedoCambio(detected);
 
-          // Contador para que no de error al iniciar medicion
           const segundosDesdeInicio = (Date.now() - tiempoInicio) / 1000;
 
-          // Si se levanta el dedo paramos la medición
           if (!detected && segundosDesdeInicio > 3) {
-            this.cancelarMedicion();
+            this.medicionECGFinalizando = true; // Cerramos aquí antes de hacer nada más
+            this.cancelarMedicion('ECG');
+
             if (this.datosObtenidosECG) {
               if (onEnd) onEnd();
             } else {
@@ -490,10 +511,7 @@ export class LinktopService {
         onRawData: () => {},
         onException: () => {},
         onLeadOff: () => {},
-        // Cálculo nativo del propio SDK — usa tiempos reales, no depende de frecuencia
-        // de muestreo asumida. Fuente fiable confirmada con pruebas repetidas (~53-54 ppm estable).
         onResult: (resultado: any) => {
-          console.log('[ECG] onResult nativo del SDK:', resultado);
           this.datosObtenidosECG = true;
           if (onMetricas) {
             onMetricas({

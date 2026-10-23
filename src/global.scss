@@ -34,4 +34,17 @@
 
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
-@import '@ionic/angular/css/palettes/dark.system.css';
+@import "@ionic/angular/css/palettes/dark.system.css";
+
+// El popover del selector de oxígeno se inserta fuera del componente (Ionic lo
+// añade al final del <body>), así que su estilo no puede ir en ring-home.page.scss
+// -- tiene que estar aquí, en el CSS global, para que le llegue de verdad.
+.popover-oxigeno {
+  --background: #ffffff; // fondo blanco de la ventana flotante
+  --color: #1c1c1e; // texto oscuro legible sobre ese fondo
+
+  ion-label {
+    color: #1c1c1e !important; // fuerza el color del texto de cada opción
+    font-family: "Quicksand", sans-serif;
+  }
+}

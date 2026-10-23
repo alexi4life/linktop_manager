@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
-import { Linktop } from './linktop';
+import { Linktop } from './HM-linktop';
 
 describe('Linktop', () => {
   let service: Linktop;
