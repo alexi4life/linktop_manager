@@ -27,6 +27,7 @@ export interface DefinicionGrafica {
   unidad: string;
   color: string;
   tipo?: 'line' | 'bar'; // Por defecto, línea
+  decimales?: number; // Decimales que se muestran (ver DECIMALES); por defecto, 0
 }
 
 /**

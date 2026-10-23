@@ -32,6 +32,7 @@ import { CommonModule } from '@angular/common';
 import { HistorialService } from '../services/HM-historial.service';
 import { GraficaHistoricoComponent } from '../components/grafica-historico/grafica-historico.component';
 import { SegmentoIosComponent } from '../components/segmento-ios/segmento-ios.component';
+import { DECIMALES, NumeroPipe } from '../constants/formato';
 import { IndicadorMedicionComponent } from '../components/indicador-medicion/indicador-medicion.component';
 import {
   EstadoConexion,
@@ -64,6 +65,7 @@ import {
     SegmentoIosComponent,
     EstadoConexionComponent,
     IndicadorMedicionComponent,
+    NumeroPipe,
   ],
 })
 export class HomePage implements OnInit {
@@ -122,6 +124,7 @@ export class HomePage implements OnInit {
       titulo: 'Temperatura',
       unidad: '°C',
       color: COLORES_METRICA.temperatura,
+      decimales: DECIMALES.temperatura,
     },
     {
       clave: 'spo2',

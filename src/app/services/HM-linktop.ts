@@ -233,11 +233,14 @@ export class LinktopService {
   ) {
     let tiempoInicio = Date.now();
     this.cancelado = false;
-    this.medicionOXFinalizando = false; // Se reinicia al empezar cada medición nueva
+
+    // Mientras arranca, la medición se trata como cerrada: ver el comentario
+    // junto a startDetect, más abajo
+    this.medicionOXFinalizando = true;
+    this.oxigenoActivo = false;
 
     // Guardamos el contexto para que onModeChange (registrado en escanearConectar)
     // pueda usarlo como respaldo si onProcess nunca avisa del final
-    this.oxigenoActivo = true;
     this.oxigenoTiempoInicio = tiempoInicio;
     this.oxigenoOnEnd = onEnd ?? null;
     this.oxigenoOnInterrumpida = onInterrumpida ?? null;
@@ -294,7 +297,17 @@ export class LinktopService {
         },
       });
 
+      // Si el SDK sigue en otro modo (p. ej. "Battery" tras consultar la
+      // batería, que nunca se para), startDetect lo detiene primero y emite,
+      // dentro de esta misma llamada, onModeChange(null) y onProcess(5) de ese
+      // modo (comprobado ejecutando el SDK con Node). Por eso la medición se
+      // activa justo DESPUÉS: así esos avisos no se toman por su final.
       this.SDK.startDetect('Blood Oxygen');
+
+      tiempoInicio = Date.now();
+      this.oxigenoTiempoInicio = tiempoInicio;
+      this.medicionOXFinalizando = false;
+      this.oxigenoActivo = true;
     } else {
       console.log('Error: SDK o registerOXListener no están definidos');
     }
@@ -473,7 +486,12 @@ export class LinktopService {
   ) {
     let tiempoInicio = 0;
     this.datosObtenidosECG = false;
-    this.medicionECGFinalizando = false; // Se reinicia al empezar cada medición nueva
+    // Como en oxígeno: el cierre de un ECG anterior deja "cancelado" a true, y
+    // sin reiniciarlo el final real de este se tomaría por una cancelación
+    this.cancelado = false;
+    // Cerrada mientras arranca: startDetect puede emitir el onProcess(5) de un
+    // modo anterior (ver medicionOxigeno). Se abre justo después de startDetect
+    this.medicionECGFinalizando = true;
 
     if (this.SDK && this.SDK.registerECGListener) {
       this.SDK.registerECGListener({
@@ -544,6 +562,8 @@ export class LinktopService {
       });
 
       this.SDK.startDetect('Electrocardiogram');
+      tiempoInicio = Date.now();
+      this.medicionECGFinalizando = false;
     } else {
       console.log('Error: SDK o registerECGListener no están definidos');
     }

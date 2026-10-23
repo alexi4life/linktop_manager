@@ -2,7 +2,7 @@
   <div class="cabecera-grafica">
     <span class="titulo-grafica" [style.color]="color">{{ titulo }}</span>
     <span class="ultimo-valor" *ngIf="ultimoValor !== null">
-      {{ ultimoValor }} <span class="unidad">{{ unidad }}</span>
+      {{ ultimoValor | numero: decimales }} <span class="unidad">{{ unidad }}</span>
     </span>
   </div>
 

@@ -21,6 +21,7 @@ import {
   Tooltip,
 } from 'chart.js';
 import { PuntoGrafica } from '../../constants/graficas';
+import { NumeroPipe, formatearNumero } from '../../constants/formato';
 
 // Solo registramos lo que usan estas gráficas (línea, barras, relleno y
 // tooltip), en vez de 'chart.js/auto', que carga todos los tipos de gráfica
@@ -46,7 +47,7 @@ Chart.register(
   templateUrl: './grafica-historico.component.html',
   styleUrls: ['./grafica-historico.component.scss'],
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, NumeroPipe],
 })
 export class GraficaHistoricoComponent
   implements AfterViewInit, OnChanges, OnDestroy
@@ -56,6 +57,7 @@ export class GraficaHistoricoComponent
   @Input() color = '#007aff';
   @Input() tipo: 'line' | 'bar' = 'line';
   @Input() puntos: PuntoGrafica[] = [];
+  @Input() decimales = 0;
 
   @ViewChild('lienzo') private lienzo!: ElementRef<HTMLCanvasElement>;
   private grafica?: Chart;
@@ -106,7 +108,8 @@ export class GraficaHistoricoComponent
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (contexto) => `${contexto.formattedValue} ${this.unidad}`,
+              label: (contexto) =>
+                `${formatearNumero(contexto.parsed.y, this.decimales)} ${this.unidad}`,
             },
           },
         },
@@ -117,7 +120,11 @@ export class GraficaHistoricoComponent
           },
           y: {
             grid: { color: '#e5e5ea' },
-            ticks: { color: '#8e8e93', maxTicksLimit: 5 },
+            ticks: {
+              color: '#8e8e93',
+              maxTicksLimit: 5,
+              callback: (valor) => formatearNumero(valor, this.decimales),
+            },
           },
         },
       },

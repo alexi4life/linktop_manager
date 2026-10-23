@@ -66,7 +66,7 @@
             *ngIf="midiendo === 'pulso'; else valorPulso"
           ></app-indicador-medicion>
           <ng-template #valorPulso>
-            {{ pulso }}<span class="unidad-sensor">lpm</span>
+            {{ pulso | numero }}<span class="unidad-sensor">lpm</span>
           </ng-template>
         </div>
         <div class="boton-medir">
@@ -97,7 +97,7 @@
             *ngIf="midiendo === 'oxigeno'; else valorOxigeno"
           ></app-indicador-medicion>
           <ng-template #valorOxigeno>
-            {{ oxigeno }}<span class="unidad-sensor">%</span>
+            {{ oxigeno | numero }}<span class="unidad-sensor">%</span>
           </ng-template>
         </div>
         <div class="boton-medir">
@@ -130,7 +130,7 @@
             *ngIf="midiendo === 'temperatura'; else valorTemperatura"
           ></app-indicador-medicion>
           <ng-template #valorTemperatura>
-            {{ temperatura }}<span class="unidad-sensor">°C</span>
+            {{ temperatura | numero: 1 }}<span class="unidad-sensor">°C</span>
           </ng-template>
         </div>
         <div class="boton-medir">
@@ -154,7 +154,7 @@
           <span class="nombre-sensor">Batería</span>
         </div>
         <div class="valor-sensor" [class.valor-vacio]="bateria === '---'">
-          {{ bateria }}<span class="unidad-sensor">%</span>
+          {{ bateria | numero }}<span class="unidad-sensor">%</span>
         </div>
         <p class="subtitulo-sensor" *ngIf="estadobateria !== '--'">
           {{ estadobateria }}
@@ -176,8 +176,8 @@
           <span class="nombre-sensor">Actividad de hoy</span>
         </div>
         <div class="valor-sensor" [class.valor-vacio]="steps === '--'">
-          {{ steps }}<span class="unidad-sensor">pasos</span> &nbsp;&nbsp; {{
-          calories }}<span class="unidad-sensor">kcal</span>
+          {{ steps | numero }}<span class="unidad-sensor">pasos</span> &nbsp;&nbsp; {{
+          calories | numero }}<span class="unidad-sensor">kcal</span>
         </div>
         <div class="boton-medir">
           <ion-button expand="block" class="boton-ios" (click)="dailyActivity()"
@@ -238,7 +238,7 @@
           class="valor-sensor"
           [class.valor-vacio]="restingHeartRate === '--'"
         >
-          {{ restingHeartRate }}<span
+          {{ restingHeartRate | numero }}<span
             class="unidad-sensor"
             *ngIf="restingHeartRate !== '--'"
             >lpm</span
@@ -272,6 +272,7 @@
       [unidad]="grafica.unidad"
       [color]="grafica.color"
       [tipo]="grafica.tipo ?? 'line'"
+      [decimales]="grafica.decimales ?? 0"
       [puntos]="puntosGraficas[grafica.clave] ?? []"
     ></app-grafica-historico>
   </div>

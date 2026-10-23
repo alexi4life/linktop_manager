@@ -55,7 +55,7 @@
           ></app-indicador-medicion>
           <ng-template #valorBT>
             <ng-container *ngIf="temperatura !== null; else vacioBT">
-              {{ temperatura }}<span class="unidad-sensor">°C</span>
+              {{ temperatura | numero: 1 }}<span class="unidad-sensor">°C</span>
             </ng-container>
           </ng-template>
           <ng-template #vacioBT>—</ng-template>
@@ -86,7 +86,7 @@
 
         <div class="valor-sensor" [class.valor-vacio]="bateria === null">
           <ng-container *ngIf="bateria !== null; else vacioBateria">
-            {{ bateria }}<span class="unidad-sensor">%</span>
+            {{ bateria | numero }}<span class="unidad-sensor">%</span>
           </ng-container>
           <ng-template #vacioBateria>—</ng-template>
         </div>
@@ -123,10 +123,10 @@
             <ng-container
               *ngIf="spo2 !== null && pulso !== null; else vacioOX"
             >
-              {{ spo2 | number:'1.0-0' }}<span class="unidad-sensor"
+              {{ spo2 | numero }}<span class="unidad-sensor"
                 >% SpO2</span
               >
-              &nbsp;&nbsp; {{ pulso }}<span class="unidad-sensor">lpm</span>
+              &nbsp;&nbsp; {{ pulso | numero }}<span class="unidad-sensor">lpm</span>
             </ng-container>
           </ng-template>
           <ng-template #vacioOX>—</ng-template>
@@ -174,11 +174,11 @@
             <ng-container
               *ngIf="presionSistolica !== null && presionDiastolica !== null; else vacioBP"
             >
-              {{ presionSistolica }}/{{ presionDiastolica }}<span
+              {{ presionSistolica | numero }}/{{ presionDiastolica | numero }}<span
                 class="unidad-sensor"
                 >mmHg</span
               >
-              &nbsp;&nbsp; {{ pulsoBP }}<span class="unidad-sensor">lpm</span>
+              &nbsp;&nbsp; {{ pulsoBP | numero }}<span class="unidad-sensor">lpm</span>
             </ng-container>
           </ng-template>
           <ng-template #vacioBP>—</ng-template>
@@ -225,8 +225,8 @@
           ></app-indicador-medicion>
           <ng-template #valorECG>
             <ng-container *ngIf="ecgHR !== null; else vacioECG">
-              {{ ecgHR | number:'1.0-0' }}<span class="unidad-sensor">lpm</span>
-              &nbsp;&nbsp; {{ ecgHRV | number:'1.0-0' }}<span
+              {{ ecgHR | numero }}<span class="unidad-sensor">lpm</span>
+              &nbsp;&nbsp; {{ ecgHRV | numero }}<span
                 class="unidad-sensor"
                 >ms HRV</span
               >
@@ -283,6 +283,7 @@
       [unidad]="grafica.unidad"
       [color]="grafica.color"
       [tipo]="grafica.tipo ?? 'line'"
+      [decimales]="grafica.decimales ?? 0"
       [puntos]="puntosGraficas[grafica.clave] ?? []"
     ></app-grafica-historico>
   </div>

@@ -26,6 +26,7 @@ import { RingBluetooth } from '../services/ring-bluetooth';
 import { timemgt } from '../constants/aux-funct';
 import { GraficaHistoricoComponent } from '../components/grafica-historico/grafica-historico.component';
 import { SegmentoIosComponent } from '../components/segmento-ios/segmento-ios.component';
+import { DECIMALES, NumeroPipe } from '../constants/formato';
 import { IndicadorMedicionComponent } from '../components/indicador-medicion/indicador-medicion.component';
 import {
   EstadoConexion,
@@ -80,6 +81,7 @@ const TIEMPO_MAXIMO_MEDICION_MS = 60_000;
     SegmentoIosComponent,
     EstadoConexionComponent,
     IndicadorMedicionComponent,
+    NumeroPipe,
   ],
 })
 export class RingHomePage implements OnInit {
@@ -180,6 +182,7 @@ export class RingHomePage implements OnInit {
       titulo: 'Temperatura',
       unidad: '°C',
       color: COLORES_METRICA.temperatura,
+      decimales: DECIMALES.temperatura,
     },
     {
       clave: 'pasos',
