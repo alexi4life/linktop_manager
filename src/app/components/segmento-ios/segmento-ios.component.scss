@@ -1,0 +1,22 @@
+:host {
+  display: block;
+}
+
+// Segmento estilo iOS: fondo gris y opción elegida en azul,
+// en vez del gris por defecto de Ionic
+ion-segment {
+  --background: #e5e5ea;
+  border-radius: 12px;
+
+  ion-segment-button {
+    --color: #8e8e93;
+    --color-checked: #ffffff;
+    --background-checked: #007aff;
+    --indicator-color: transparent; // El fondo azul ya hace de indicador
+    font-family: "Quicksand", sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: none;
+    min-height: 32px;
+  }
+}

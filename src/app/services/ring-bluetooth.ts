@@ -11,6 +11,9 @@ import { BehaviorSubject, Subject } from 'rxjs';
 declare var require: any;
 const SDK = require('../../assets/lib/ringSDK');
 
+/** Reconexiones automáticas permitidas en una misma descarga de históricos. */
+const MAX_RECONEXIONES_HISTORICOS = 3;
+
 /**
  * Servicio encargado de toda la comunicación Bluetooth con el anillo NexRing,
  * usando el SDK oficial del fabricante (ringSDK.js).
@@ -40,9 +43,12 @@ export class RingBluetooth {
   // anillo entra en reposo a mitad de la transferencia (ocurre cada ~30s)
   private descargandoHistoricos: boolean = false;
   private ultimoDeviceId: string | null = null;
+  private intentosReconexionHistoricos: number = 0; // Reconexiones hechas en la descarga actual
+  private listenerHistoricos: any = null; // Mismo objeto registrado, necesario para poder darlo de baja
 
   /* CANALES (Observables) PARA COMUNICAR DATOS AL RESTO DE LA APP */
   public healthData$ = new Subject<any>();
+  public healthDataFallida$ = new Subject<void>(); // Avisa si una medición de salud termina sin lectura estable
   public connection_state$ = new BehaviorSubject<boolean>(false);
   public batteryData$ = new Subject<any>();
   public deviceInfo1$ = new Subject<any>();
@@ -55,6 +61,7 @@ export class RingBluetooth {
   private rePackageListenerRegistrado: boolean = false; // Para no registrar listener más de una vez
   public deviceInfo5$ = new Subject<any>();
   public historicalDataCompleta$ = new Subject<void>(); // Avisa cuando la descarga de históricos termina de verdad
+  public historicalDataAbortada$ = new Subject<void>(); // Avisa si la descarga se corta antes de recibirlo todo
 
   constructor() {}
   /**
@@ -254,6 +261,17 @@ export class RingBluetooth {
   private async reconectarSiDescargandoHistoricos(): Promise<void> {
     if (!this.descargandoHistoricos || !this.ultimoDeviceId) return;
 
+    // Sin límite, una descarga que nunca completa el recuento reconectaría el
+    // anillo cada vez que se duerme, gastando su batería indefinidamente
+    if (this.intentosReconexionHistoricos >= MAX_RECONEXIONES_HISTORICOS) {
+      console.warn(
+        `[AUTO-RECONEXIÓN] Superados ${MAX_RECONEXIONES_HISTORICOS} intentos. Se aborta la descarga de históricos.`,
+      );
+      this.abortarDescargaHistoricos();
+      return;
+    }
+    this.intentosReconexionHistoricos++;
+
     console.log(
       '[AUTO-RECONEXIÓN] El anillo se durmió a mitad de la descarga de históricos. Reconectando...',
     );
@@ -271,8 +289,22 @@ export class RingBluetooth {
       console.error(
         '[AUTO-RECONEXIÓN] No se pudo reconectar. Se aborta la descarga de históricos.',
       );
-      this.descargandoHistoricos = false;
+      this.abortarDescargaHistoricos();
     }
+  }
+
+  /**
+   * Da por terminada una descarga de históricos incompleta: deja de escuchar
+   * registros y avisa a la app para que guarde lo recibido. No se debe borrar
+   * nada del anillo, porque quedan registros sin descargar.
+   */
+  private abortarDescargaHistoricos(): void {
+    this.descargandoHistoricos = false;
+    if (this.listenerHistoricos) {
+      SDK.default.unregisterHistoricalDataListener(this.listenerHistoricos);
+      this.listenerHistoricos = null;
+    }
+    this.historicalDataAbortada$.next();
   }
 
   /**
@@ -434,6 +466,7 @@ export class RingBluetooth {
         type === 'historicalData'
       ) {
         this.descargandoHistoricos = true; // Activamos el control de reconexión automática
+        this.intentosReconexionHistoricos = 0;
         let register_counter = 0;
         // Evita contar/emitir el mismo registro dos veces si el anillo reenvía
         // datos ya recibidos tras una reconexión automática
@@ -465,10 +498,17 @@ export class RingBluetooth {
               SDK.default.unregisterHistoricalDataListener(
                 historicalDataListener,
               );
+              this.listenerHistoricos = null;
               this.historicalDataCompleta$.next(); // Avisamos de que la descarga ha terminado de verdad
             }
           },
         };
+        // Si quedaba el listener de una descarga anterior, lo damos de baja
+        // para que no haya dos procesando los mismos registros
+        if (this.listenerHistoricos) {
+          SDK.default.unregisterHistoricalDataListener(this.listenerHistoricos);
+        }
+        this.listenerHistoricos = historicalDataListener;
         SDK.default.registerHistoricalDataListener(historicalDataListener);
         await this.sendData(type);
         return;
@@ -585,6 +625,7 @@ export class RingBluetooth {
               console.warn('Demasiados intentos de comunicación');
               isClosing = true;
               SDK.default.unregisterHealthListener(healthListener);
+              this.healthDataFallida$.next();
               const closeCmd =
                 type === 'openSingleHealth'
                   ? 'closeSingleHealth'

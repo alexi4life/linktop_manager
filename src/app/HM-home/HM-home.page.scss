@@ -19,19 +19,6 @@ ion-content {
   --background: var(--color-fondo);
 }
 
-// ===== CABECERA DE ESTADO BLUETOOTH =====
-.tarjeta-estado {
-  border-radius: var(--radio-tarjeta);
-  box-shadow: var(--sombra-tarjeta);
-  margin-bottom: 16px;
-
-  .texto-estado {
-    font-size: 0.9rem;
-    color: var(--color-texto-secundario);
-    text-align: center;
-  }
-}
-
 // ===== CUADRÍCULA DE TARJETAS DE SENSORES =====
 .cuadricula-sensores {
   display: grid;
@@ -136,6 +123,11 @@ ion-content {
   font-weight: 600;
   text-transform: none;
   margin: 0;
+
+  // Mientras mide, el mismo botón sirve para detener (en rojo iOS)
+  &.boton-detener {
+    --background: #ff3b30;
+  }
 }
 
 // ===== MENSAJES DE ESTADO (dedo levantado, errores...) =====
@@ -182,65 +174,10 @@ ion-content {
   }
 }
 
-// ===== BOTÓN CANCELAR =====
-.boton-cancelar {
-  margin-top: 16px;
-}
-
-// ===== BOTÓN CANCELAR =====
+// ===== CABECERA =====
 // Forzamos el estilo claro en la cabecera, igual sin importar el modo oscuro del sistema
 ion-header ion-toolbar {
   --background: #ffffff;
   --color: #1c1c1e;
   --border-color: #e5e5ea;
-}
-
-// La tarjeta de estado también debe verse clara, a juego con el resto
-.tarjeta-estado {
-  --background: #ffffff;
-  --color: #1c1c1e;
-
-  .texto-estado {
-    color: var(--color-texto-secundario);
-  }
-}
-// Cada gráfica de histórico en su propia tarjeta, con el mismo estilo
-.tarjeta-grafica {
-  background: var(--color-tarjeta);
-  border-radius: var(--radio-tarjeta);
-  box-shadow: var(--sombra-tarjeta);
-  padding: 16px;
-  margin-bottom: 12px;
-
-  .titulo-grafica {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--color-texto-secundario);
-    margin-bottom: 8px;
-    text-align: center;
-  }
-
-  canvas {
-    width: 100% !important;
-  }
-}
-
-// Selector de rango de fechas (24h/7d/30d/Todo), con el mismo estilo iOS
-// que el resto de la app en vez del gris por defecto de Ionic
-.segmento-rango {
-  --background: #e5e5ea;
-  border-radius: 12px;
-  margin-bottom: 16px;
-
-  ion-segment-button {
-    --color: #8e8e93;
-    --color-checked: #ffffff;
-    --background-checked: #007aff;
-    --indicator-color: transparent; // el fondo azul ya hace de indicador
-    font-family: "Quicksand", sans-serif;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: none;
-    min-height: 32px;
-  }
 }

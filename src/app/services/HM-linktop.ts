@@ -47,6 +47,11 @@ export class LinktopService {
     this.SDK = (window as any).default;
   }
 
+  /** Nombre Bluetooth del monitor conectado, o cadena vacía si no hay ninguno. */
+  get nombreDispositivo(): string {
+    return this.dispositivoConectado?.name ?? '';
+  }
+
   /**
    * Inicializa el módulo y el hardware de Bluetooth Low Energy (BLE) en el dispositivo.
    * Es el punto de entrada obligatorio antes de intentar cualquier escaneo o conexión

@@ -5,16 +5,10 @@ import {
   IonTitle,
   IonContent,
   IonButton,
-  IonCard,
-  IonCardContent,
   IonSpinner,
   IonIcon,
-  IonSegment,
-  IonSegmentButton,
-  IonLabel,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { FormsModule } from '@angular/forms';
 import {
   thermometerOutline,
   waterOutline,
@@ -27,7 +21,21 @@ import {
 import { LinktopService } from '../services/HM-linktop';
 import { CommonModule } from '@angular/common';
 import { HistorialService } from '../services/HM-historial.service';
-import Chart from 'chart.js/auto';
+import { GraficaHistoricoComponent } from '../components/grafica-historico/grafica-historico.component';
+import { SegmentoIosComponent } from '../components/segmento-ios/segmento-ios.component';
+import {
+  EstadoConexion,
+  EstadoConexionComponent,
+} from '../components/estado-conexion/estado-conexion.component';
+import {
+  COLORES_METRICA,
+  DefinicionGrafica,
+  OPCIONES_RANGO,
+  PuntoGrafica,
+  RangoGrafica,
+  aPuntos,
+  calcularFechaDesde,
+} from '../constants/graficas';
 
 @Component({
   selector: 'app-home',
@@ -40,21 +48,26 @@ import Chart from 'chart.js/auto';
     IonTitle,
     IonContent,
     IonButton,
-    IonCard,
-    IonCardContent,
     IonSpinner,
     IonIcon,
     CommonModule,
-    IonSegment,
-    IonSegmentButton,
-    IonLabel,
-    FormsModule,
+    GraficaHistoricoComponent,
+    SegmentoIosComponent,
+    EstadoConexionComponent,
   ],
 })
 export class HomePage implements OnInit {
   // VARIABLES DEL BLUETOOTH
-  estadoBluetooth: string = 'Bluetooth apagado';
+  estadoConexion: EstadoConexion = 'sin-conectar';
+  nombreDispositivo: string = '';
   conectado: boolean = false;
+
+  // SECCIÓN VISIBLE (segmento de la cabecera)
+  seccion: 'medidas' | 'historicos' = 'medidas';
+  readonly secciones = [
+    { valor: 'medidas', texto: 'Medidas' },
+    { valor: 'historicos', texto: 'Históricos' },
+  ];
 
   // VARIABLES TEMPERATURA
   midiendoBT: boolean = false;
@@ -87,19 +100,69 @@ export class HomePage implements OnInit {
   ecgHRV: number | null = null;
   dedoPuestoECG: boolean = true;
 
-  // Rango de fechas seleccionado para las gráficas de datos guardados
-  rangoGraficasSeleccionado: '24h' | '7d' | '30d' | 'todo' = '7d';
+  // VARIABLES DE GRÁFICAS DE HISTÓRICOS
+  rangoGraficasSeleccionado: RangoGrafica = '7d';
+  readonly opcionesRango = OPCIONES_RANGO;
 
-  // Instancias de las 9 gráficas de históricos guardados
-  public chartTemperatura: any;
-  public chartSpo2: any;
-  public chartPulsoOxigeno: any;
-  public chartSistolica: any;
-  public chartDiastolica: any;
-  public chartPulsoPresion: any;
-  public chartEcgHR: any;
-  public chartEcgHRV: any;
-  public chartBateria: any;
+  // Gráficas que se muestran, en orden; sus puntos se guardan en "puntosGraficas"
+  readonly graficas: DefinicionGrafica[] = [
+    {
+      clave: 'temperatura',
+      titulo: 'Temperatura',
+      unidad: '°C',
+      color: COLORES_METRICA.temperatura,
+    },
+    {
+      clave: 'spo2',
+      titulo: 'SpO2',
+      unidad: '%',
+      color: COLORES_METRICA.spo2,
+    },
+    {
+      clave: 'pulsoOxigeno',
+      titulo: 'Pulso (oxímetro)',
+      unidad: 'lpm',
+      color: COLORES_METRICA.pulso,
+    },
+    {
+      clave: 'sistolica',
+      titulo: 'Presión sistólica',
+      unidad: 'mmHg',
+      color: COLORES_METRICA.sistolica,
+    },
+    {
+      clave: 'diastolica',
+      titulo: 'Presión diastólica',
+      unidad: 'mmHg',
+      color: COLORES_METRICA.diastolica,
+    },
+    {
+      clave: 'pulsoPresion',
+      titulo: 'Pulso (tensiómetro)',
+      unidad: 'lpm',
+      color: COLORES_METRICA.pulso,
+    },
+    {
+      clave: 'ecgHR',
+      titulo: 'ECG · Frecuencia cardíaca',
+      unidad: 'lpm',
+      color: COLORES_METRICA.pulso,
+    },
+    {
+      clave: 'ecgHRV',
+      titulo: 'ECG · HRV',
+      unidad: 'ms',
+      color: COLORES_METRICA.hrv,
+    },
+    {
+      clave: 'bateria',
+      titulo: 'Batería',
+      unidad: '%',
+      color: COLORES_METRICA.bateria,
+    },
+  ];
+  puntosGraficas: Partial<Record<string, PuntoGrafica[]>> = {};
+
   public glucosa: any; // TODO - Queda pendiente de analizar
 
   // Medición activa para poder detenerla
@@ -117,47 +180,54 @@ export class HomePage implements OnInit {
       waterOutline,
       pulseOutline,
       heartOutline,
-      //thermometerOutline: thermometerOutline,
-      //waterOutline: waterOutline,
-      //pulseOutline: pulseOutline,
-      //batteryHalfOutline: batteryHalfOutline,
-      //heartOutline: heartOutline,
-      checkmarkCircle: checkmarkCircle,
-      warningOutline: warningOutline,
+      checkmarkCircle,
+      warningOutline,
     });
   }
 
+  /**
+   * Inicializa el Bluetooth, carga las gráficas guardadas y se suscribe a los
+   * nuevos guardados del historial para redibujarlas automáticamente.
+   */
   async ngOnInit() {
-    this.estadoBluetooth = await this.LTS.inicializarBluetooth();
+    const respuesta = await this.LTS.inicializarBluetooth();
+    if (respuesta.includes('Error')) this.estadoConexion = 'error';
 
     // Cada vez que se guarda algo nuevo, redibujamos las gráficas automáticamente
     this.historial.datosActualizados$.subscribe(() => {
       this.cargarGraficasDesdeAlmacenamiento();
     });
 
-    // Cargamos las gráficas por primera vez, esté o no conectado el monitor.
-    // Esperamos un instante para que Angular renderice el HTML antes de buscar los <canvas>
-    setTimeout(() => {
-      this.cargarGraficasDesdeAlmacenamiento();
-    }, 300);
+    // Cargamos las gráficas por primera vez, esté o no conectado el monitor
+    this.cargarGraficasDesdeAlmacenamiento();
   }
 
+  /** Busca el monitor Linktop cercano y se conecta a él. */
   async buscarDispositivo() {
-    this.estadoBluetooth = 'Buscando el monitor de salud Linktop...';
+    this.estadoConexion = 'buscando';
     const respuesta = await this.LTS.escanearConectar();
-    this.estadoBluetooth = respuesta;
-    if (!respuesta.includes('Error')) this.conectado = true;
+    this.conectado = !respuesta.includes('Error');
+
+    // Si el usuario cancela el escaneo, volvemos a "sin conectar"
+    this.estadoConexion = this.conectado ? 'conectado' : 'sin-conectar';
+    this.nombreDispositivo = this.LTS.nombreDispositivo;
   }
 
+  /** Indica si hay alguna medición en curso, para bloquear el resto de botones. */
+  get hayMedicionEnCurso(): boolean {
+    return (
+      this.midiendoBT || this.midiendoOX || this.midiendoBP || this.midiendoECG
+    );
+  }
+
+  /** Mide la temperatura corporal y la guarda en el historial. */
   medirBT() {
-    this.estadoBluetooth = 'iniciando medición...';
     this.midiendoBT = true;
     this.temperatura = null;
 
     this.LTS.medicionTemperatura((resultado) => {
       this.midiendoBT = false;
       this.temperatura = Number(resultado);
-      this.estadoBluetooth = 'Medición completada';
 
       this.historial.guardarMedicion('temperatura', {
         temperatura: this.temperatura,
@@ -165,6 +235,10 @@ export class HomePage implements OnInit {
     });
   }
 
+  /**
+   * Mide oxígeno en sangre (SpO2) y pulso. Si el usuario levanta el dedo, la
+   * medición se interrumpe; al terminar, guarda el último valor recibido.
+   */
   medirOX() {
     this.medicionActiva = 'OX';
     this.midiendoOX = true;
@@ -173,7 +247,6 @@ export class HomePage implements OnInit {
     this.pulso = null;
     this.dedoPuesto = true;
     this.errorOxigeno = null;
-    this.estadoBluetooth = 'Oxímetro activado. Esperando lectura...';
 
     let spo2Temp: number | null = null;
     let pulsoTemp: number | null = null;
@@ -193,18 +266,13 @@ export class HomePage implements OnInit {
           this.pulso = null;
           this.errorOxigeno =
             'Medición interrumpida. Vuelva a intentarlo manteniendo el dedo apoyado.';
-          this.estadoBluetooth = '⚠️ ¡Has levantado el dedo del sensor!';
-        } else {
-          this.estadoBluetooth = 'Midiendo oxígeno... Mantén el dedo apoyado.';
         }
-        this.dedoPuesto = estaTocando;
         this.cdr.detectChanges();
       },
       () => {
         this.midiendoOX = false;
         this.spo2 = spo2Temp;
         this.pulso = pulsoTemp;
-        this.estadoBluetooth = 'Medición de Oxigeno completada';
         this.cdr.detectChanges();
 
         if (spo2Temp !== null && pulsoTemp !== null) {
@@ -217,6 +285,7 @@ export class HomePage implements OnInit {
     );
   }
 
+  /** Consulta el nivel de batería del monitor y si está cargando. */
   consultarBateria() {
     this.LTS.medicionBateria(
       (nivel) => {
@@ -237,15 +306,16 @@ export class HomePage implements OnInit {
     );
   }
 
+  /** Detiene la medición activa (oxígeno, presión o ECG) en el monitor. */
   cancelarMedicion() {
     if (this.medicionActiva) this.LTS.cancelarMedicion(this.medicionActiva);
     this.midiendoOX = false;
     this.midiendoBP = false;
     this.midiendoECG = false;
-    this.estadoBluetooth = 'Medición cancelada.';
     this.cdr.detectChanges();
   }
 
+  /** Mide la presión arterial (sistólica, diastólica y pulso). */
   medirBP() {
     this.medicionActiva = 'BP';
     this.midiendoBP = true;
@@ -253,7 +323,6 @@ export class HomePage implements OnInit {
     this.presionDiastolica = null;
     this.pulsoBP = null;
     this.errorBP = null;
-    this.estadoBluetooth = 'Midiendo presión arterial...';
 
     this.LTS.medicionPresion(
       (sistolica, diastolica, pulso) => {
@@ -261,7 +330,6 @@ export class HomePage implements OnInit {
         this.presionSistolica = Math.round(sistolica);
         this.presionDiastolica = Math.round(diastolica);
         this.pulsoBP = Math.round(pulso);
-        this.estadoBluetooth = 'Medición de presión completada.';
         this.cdr.detectChanges();
 
         this.historial.guardarMedicion('presion', {
@@ -273,25 +341,25 @@ export class HomePage implements OnInit {
       (mensaje) => {
         this.midiendoBP = false;
         this.errorBP = mensaje;
-        this.estadoBluetooth = 'Error en la medición de presión.';
         this.cdr.detectChanges();
       },
       () => {
         this.midiendoBP = false;
-        this.estadoBluetooth = 'Medición de presión interrumpida.';
         this.cdr.detectChanges();
       },
     );
   }
 
+  /**
+   * Inicia el electrocardiograma: dibuja la onda en tiempo real y, al recibir
+   * la frecuencia cardíaca y la HRV calculadas por el SDK, la detiene y las guarda.
+   */
   medirECG() {
     this.medicionActiva = 'ECG';
     this.midiendoECG = true;
     this.errorECG = null;
     this.puntosECG = [];
     this.ecgAnimacionActiva = true;
-    this.estadoBluetooth =
-      'ECG activo. Mantenga los dedos sobre el electrodo...';
     this.ecgHR = null;
     this.ecgHRV = null;
     this.dedoPuestoECG = true;
@@ -315,13 +383,11 @@ export class HomePage implements OnInit {
         this.puntosECG = [];
         this.errorECG =
           'Medición interrumpida. Mantenga los dedos sobre el electrodo durante 30 segundos.';
-        this.estadoBluetooth = 'ECG interrumpido.';
         this.cdr.detectChanges();
       },
       () => {
         this.ecgAnimacionActiva = false;
         this.midiendoECG = false;
-        this.estadoBluetooth = 'ECG completado.';
         this.cdr.detectChanges();
       },
       (metricas) => {
@@ -343,6 +409,7 @@ export class HomePage implements OnInit {
     );
   }
 
+  /** Redibuja la onda del ECG a unos 30 fotogramas por segundo mientras está activo. */
   bucleECG() {
     if (!this.ecgAnimacionActiva) return;
 
@@ -353,6 +420,7 @@ export class HomePage implements OnInit {
     }, 33);
   }
 
+  /** Pinta en el canvas los últimos 1200 puntos de la onda del ECG, autoescalados. */
   dibujarECG() {
     const canvas = document.getElementById('canvasECG') as HTMLCanvasElement;
     if (!canvas) return;
@@ -417,90 +485,12 @@ export class HomePage implements OnInit {
   }
 
   /**
-   * Crea las 9 gráficas de históricos guardados, buscando cada canvas por su ID.
-   * Se ejecuta solo la primera vez.
-   */
-  crearGraficas_historicos() {
-    const idsYVariables: [string, string][] = [
-      ['graficaTemperatura', 'chartTemperatura'],
-      ['graficaSpo2', 'chartSpo2'],
-      ['graficaPulsoOxigeno', 'chartPulsoOxigeno'],
-      ['graficaSistolica', 'chartSistolica'],
-      ['graficaDiastolica', 'chartDiastolica'],
-      ['graficaPulsoPresion', 'chartPulsoPresion'],
-      ['graficaEcgHR', 'chartEcgHR'],
-      ['graficaEcgHRV', 'chartEcgHRV'],
-      ['graficaBateria', 'chartBateria'],
-    ];
-
-    // Si algún canvas no está todavía en el DOM, abortamos sin crear nada
-    const canvases = idsYVariables.map(
-      ([id]) => document.getElementById(id) as HTMLCanvasElement,
-    );
-
-    if (canvases.some((c) => !c)) return;
-
-    const colores: Record<string, string> = {
-      chartTemperatura: 'orange',
-      chartSpo2: 'cyan',
-      chartPulsoOxigeno: 'red',
-      chartSistolica: 'purple',
-      chartDiastolica: 'blue',
-      chartPulsoPresion: 'red',
-      chartEcgHR: 'red',
-      chartEcgHRV: 'green',
-      chartBateria: 'green',
-    };
-
-    idsYVariables.forEach(([id, variable], i) => {
-      (this as any)[variable] = new Chart(canvases[i], {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            {
-              label: variable,
-              data: [],
-              borderColor: colores[variable],
-              tension: 0.4,
-            },
-          ],
-        },
-        options: { responsive: true },
-      });
-    });
-  }
-
-  /**
-   * Calcula la fecha de inicio según la opción elegida en el selector de rango.
-   */
-  private calcularFechaDesde(): Date {
-    const ahora = new Date();
-    switch (this.rangoGraficasSeleccionado) {
-      case '24h':
-        return new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
-      case '7d':
-        return new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
-      case '30d':
-        return new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
-      case 'todo':
-      default:
-        return new Date(0);
-    }
-  }
-
-  /**
-   * Lee del almacenamiento local las 9 métricas guardadas, filtradas por el
-   * rango de fechas seleccionado, y redibuja las gráficas desde cero.
-   * No depende de que el monitor esté conectado -- lee siempre de lo guardado.
+   * Lee del almacenamiento local las métricas guardadas dentro del rango de
+   * fechas elegido y actualiza los puntos de cada gráfica.
+   * No depende de que el monitor esté conectado: lee siempre de lo guardado.
    */
   async cargarGraficasDesdeAlmacenamiento() {
-    if (!this.chartTemperatura) {
-      this.crearGraficas_historicos();
-    }
-    if (!this.chartTemperatura) return; // Los canvas aún no están en el DOM
-
-    const desde = this.calcularFechaDesde();
+    const desde = calcularFechaDesde(this.rangoGraficasSeleccionado);
 
     const [temperatura, oxigeno, presion, ecg, bateria] = await Promise.all([
       this.historial.obtenerHistorialPorTipoYFecha('temperatura', desde),
@@ -510,42 +500,25 @@ export class HomePage implements OnInit {
       this.historial.obtenerHistorialPorTipoYFecha('bateria', desde),
     ]);
 
-    const ordenarPorFecha = (lista: any[]) =>
-      lista.sort(
-        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
-      );
-    [temperatura, oxigeno, presion, ecg, bateria].forEach(ordenarPorFecha);
-
-    const formatearFecha = (fechaISO: string) => {
-      const f = new Date(fechaISO);
-      const dia = f.getDate().toString().padStart(2, '0');
-      const mes = (f.getMonth() + 1).toString().padStart(2, '0');
-      const horas = f.getHours().toString().padStart(2, '0');
-      const mins = f.getMinutes().toString().padStart(2, '0');
-      return `${dia}/${mes} ${horas}:${mins}`;
+    // Las claves coinciden con las de "graficas"
+    this.puntosGraficas = {
+      temperatura: aPuntos(temperatura, 'temperatura'),
+      spo2: aPuntos(oxigeno, 'spo2'),
+      pulsoOxigeno: aPuntos(oxigeno, 'pulso'),
+      sistolica: aPuntos(presion, 'sistolica'),
+      diastolica: aPuntos(presion, 'diastolica'),
+      pulsoPresion: aPuntos(presion, 'pulso'),
+      ecgHR: aPuntos(ecg, 'hr'),
+      ecgHRV: aPuntos(ecg, 'hrv'),
+      bateria: aPuntos(bateria, 'porcentaje'),
     };
-
-    const volcarEnGrafica = (chart: any, lista: any[], campo: string) => {
-      chart.data.labels = lista.map((r) => formatearFecha(r.fecha));
-      chart.data.datasets[0].data = lista.map((r) => r.valores[campo]);
-      chart.update();
-    };
-
-    volcarEnGrafica(this.chartTemperatura, temperatura, 'temperatura');
-    volcarEnGrafica(this.chartSpo2, oxigeno, 'spo2');
-    volcarEnGrafica(this.chartPulsoOxigeno, oxigeno, 'pulso');
-    volcarEnGrafica(this.chartSistolica, presion, 'sistolica');
-    volcarEnGrafica(this.chartDiastolica, presion, 'diastolica');
-    volcarEnGrafica(this.chartPulsoPresion, presion, 'pulso');
-    volcarEnGrafica(this.chartEcgHR, ecg, 'hr');
-    volcarEnGrafica(this.chartEcgHRV, ecg, 'hrv');
-    volcarEnGrafica(this.chartBateria, bateria, 'porcentaje');
 
     this.cdr.detectChanges();
   }
 
   /** Se llama cuando el usuario cambia el selector de rango de fechas. */
-  async cambiarRangoGraficas() {
+  async cambiarRangoGraficas(rango: RangoGrafica) {
+    this.rangoGraficasSeleccionado = rango;
     await this.cargarGraficasDesdeAlmacenamiento();
   }
 }

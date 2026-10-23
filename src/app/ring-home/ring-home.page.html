@@ -2,41 +2,56 @@
   <ion-toolbar>
     <ion-title>NexRing</ion-title>
   </ion-toolbar>
+  <!-- Selector de sección, fijo bajo el título -->
+  <ion-toolbar class="barra-secciones">
+    <app-segmento-ios
+      [opciones]="secciones"
+      [valor]="seccion"
+      (valorChange)="cambiarSeccion($event)"
+    ></app-segmento-ios>
+  </ion-toolbar>
 </ion-header>
 
 <ion-content class="ion-padding">
-  <!-- Estado de conexión -->
-  <ion-card class="tarjeta-estado">
-    <ion-card-content class="ion-text-center">
-      <p class="texto-estado">
-        {{ connected ? '🟢 Conectado' : (hasRing ? '⚪ En reposo (ahorro de
-        batería)' : 'Sin anillo vinculado') }}
-      </p>
-    </ion-card-content>
-  </ion-card>
+  <app-estado-conexion
+    [estado]="estadoConexion"
+    [detalle]="connected ? ringName : ''"
+  ></app-estado-conexion>
 
-  <!-- Pantalla de conexión inicial -->
-  <!-- Botón para vincular por primera vez (nunca ha habido anillo vinculado) -->
-  <div *ngIf="!hasRing" class="ion-text-center ion-margin-top">
-    <ion-button expand="block" class="boton-ios" (click)="search4ring()">
-      Buscar y Conectar Anillo
-    </ion-button>
-  </div>
+  <!-- ===== SECCIÓN MEDIDAS ===== -->
+  <div *ngIf="seccion === 'medidas'">
+    <!-- Botón para vincular por primera vez (nunca ha habido anillo vinculado) -->
+    <div *ngIf="!hasRing" class="ion-text-center ion-margin-top">
+      <ion-button
+        expand="block"
+        class="boton-ios"
+        (click)="search4ring()"
+        [disabled]="buscando"
+      >
+        Buscar y Conectar Anillo
+      </ion-button>
+    </div>
 
-  <!-- Botón para reconectar a mano: aparece cuando hay anillo vinculado pero
-     no está conectado ahora mismo (por ejemplo, si la reconexión automática
-     falló por limitaciones del navegador) -->
-  <div *ngIf="hasRing && !connected" class="ion-text-center ion-margin-top">
-    <ion-button expand="block" class="boton-ios" (click)="search4ring()">
-      Reconectar Anillo
-    </ion-button>
-  </div>
+    <!-- Botón para reconectar a mano: aparece cuando hay anillo vinculado pero
+       no está conectado ahora mismo (por ejemplo, si la reconexión automática
+       falló por limitaciones del navegador) -->
+    <div *ngIf="hasRing && !connected" class="ion-text-center ion-margin-top">
+      <ion-button
+        expand="block"
+        class="boton-ios"
+        (click)="search4ring()"
+        [disabled]="buscando"
+      >
+        Reconectar Anillo
+      </ion-button>
+    </div>
 
-  <!-- El resto del contenido (gráficas y tarjetas) se muestra siempre que haya
-     habido alguna vez un anillo vinculado, esté conectado ahora mismo o no -->
-  <div *ngIf="hasRing">
-    ...
-    <div class="cuadricula-sensores">
+    <!-- Error de la última medición puntual (sin lectura estable, sin respuesta...) -->
+    <p class="mensaje-alerta" *ngIf="errorMedicion">{{ errorMedicion }}</p>
+
+    <!-- Las tarjetas se muestran siempre que haya un anillo vinculado,
+       esté conectado ahora mismo o no -->
+    <div *ngIf="hasRing" class="cuadricula-sensores">
       <!-- Pulso y HRV -->
       <div class="tarjeta-sensor">
         <div class="cabecera-sensor">
@@ -45,12 +60,21 @@
         </div>
         <div
           class="valor-sensor"
-          [class.valor-vacio]="pulso === '---' || pulso === '--'"
+          [class.valor-vacio]="(pulso === '---' || pulso === '--') && midiendo !== 'pulso'"
         >
-          {{ pulso }}<span class="unidad-sensor">bpm</span>
+          <span *ngIf="midiendo === 'pulso'; else valorPulso" class="indicador-midiendo">
+            <ion-spinner name="crescent"></ion-spinner>Midiendo…
+          </span>
+          <ng-template #valorPulso>
+            {{ pulso }}<span class="unidad-sensor">bpm</span>
+          </ng-template>
         </div>
         <div class="boton-medir">
-          <ion-button expand="block" class="boton-ios" (click)="measuringHRV()"
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="measuringHRV()"
+            [disabled]="midiendo !== null"
             >Medir HRV</ion-button
           >
         </div>
@@ -62,11 +86,23 @@
           <ion-icon name="water-outline" class="color-oxigeno"></ion-icon>
           <span class="nombre-sensor">Oxígeno</span>
         </div>
-        <div class="valor-sensor" [class.valor-vacio]="oxigeno === '--'">
-          {{ oxigeno }}<span class="unidad-sensor">%</span>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="oxigeno === '--' && midiendo !== 'oxigeno'"
+        >
+          <span *ngIf="midiendo === 'oxigeno'; else valorOxigeno" class="indicador-midiendo">
+            <ion-spinner name="crescent"></ion-spinner>Midiendo…
+          </span>
+          <ng-template #valorOxigeno>
+            {{ oxigeno }}<span class="unidad-sensor">%</span>
+          </ng-template>
         </div>
         <div class="boton-medir">
-          <ion-button expand="block" class="boton-ios" (click)="measuringOX()"
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="measuringOX()"
+            [disabled]="midiendo !== null"
             >Medir Oxígeno</ion-button
           >
         </div>
@@ -81,14 +117,23 @@
           ></ion-icon>
           <span class="nombre-sensor">Temperatura</span>
         </div>
-        <div class="valor-sensor" [class.valor-vacio]="temperatura === '--'">
-          {{ temperatura }}<span class="unidad-sensor">°C</span>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="temperatura === '--' && midiendo !== 'temperatura'"
+        >
+          <span *ngIf="midiendo === 'temperatura'; else valorTemperatura" class="indicador-midiendo">
+            <ion-spinner name="crescent"></ion-spinner>Midiendo…
+          </span>
+          <ng-template #valorTemperatura>
+            {{ temperatura }}<span class="unidad-sensor">°C</span>
+          </ng-template>
         </div>
         <div class="boton-medir">
           <ion-button
             expand="block"
             class="boton-ios"
             (click)="fingerTemperature()"
+            [disabled]="midiendo !== null"
             >Medir</ion-button
           >
         </div>
@@ -202,7 +247,36 @@
           >
         </div>
       </div>
+    </div>
+  </div>
 
+  <!-- ===== SECCIÓN HISTÓRICOS =====
+       Datos guardados en local, visibles aunque el anillo no esté conectado -->
+  <div *ngIf="seccion === 'historicos'">
+    <app-segmento-ios
+      class="selector-rango"
+      [opciones]="opcionesRango"
+      [valor]="rangoGraficasSeleccionado"
+      (valorChange)="cambiarRangoGraficas($event)"
+    ></app-segmento-ios>
+
+    <app-grafica-historico
+      *ngFor="let grafica of graficas"
+      [titulo]="grafica.titulo"
+      [unidad]="grafica.unidad"
+      [color]="grafica.color"
+      [tipo]="grafica.tipo ?? 'line'"
+      [puntos]="puntosGraficas[grafica.clave] ?? []"
+    ></app-grafica-historico>
+  </div>
+
+  <!-- ===== SECCIÓN DISPOSITIVO ===== -->
+  <div *ngIf="seccion === 'dispositivo'">
+    <p *ngIf="!hasRing" class="ion-text-center texto-sin-anillo">
+      No hay ningún anillo vinculado. Vincúlalo desde Medidas.
+    </p>
+
+    <div *ngIf="hasRing" class="cuadricula-sensores">
       <!-- Info del dispositivo -->
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
@@ -255,173 +329,102 @@
           <ion-button
             expand="block"
             class="boton-ios"
-            (click)="measuringInfoDevice1()"
-            >Actualizar Info 1</ion-button
-          >
-          <ion-button
-            expand="block"
-            class="boton-ios ion-margin-top"
-            (click)="measuringInfoDevice2()"
-            >Actualizar Info 2</ion-button
-          >
-          <ion-button
-            expand="block"
-            class="boton-ios ion-margin-top"
-            (click)="measuringInfoDevice5()"
-            >Actualizar Info 5</ion-button
+            (click)="actualizarInfoDispositivo()"
+            >Actualizar</ion-button
           >
         </div>
       </div>
     </div>
-    <div class="tarjeta-sensor tarjeta-ancha">
-      <!-- Selector de intervalo + interruptor, en la misma fila -->
-      <div class="fila-info fila-selector">
-        <div class="cabecera-info">
-          <ion-icon
-            name="information-circle-outline"
-            class="color-info"
-          ></ion-icon>
-          <span class="nombre-info">Medición oxígeno nocturna</span>
-        </div>
-        <div class="grupo-selector-switch">
-          <ion-select
-            [(ngModel)]="intervaloOxigenoSeleccionado"
-            interface="popover"
-            class="select-ios"
-            [interfaceOptions]="{ cssClass: 'popover-oxigeno' }"
-          >
-            <ion-select-option [value]="5">5 min</ion-select-option>
-            <ion-select-option [value]="10">10 min</ion-select-option>
-            <ion-select-option [value]="15">15 min</ion-select-option>
-            <ion-select-option [value]="30">30 min</ion-select-option>
-            <ion-select-option [value]="60">60 min</ion-select-option>
-            <ion-select-option [value]="120">120 min</ion-select-option>
-          </ion-select>
 
-          <ion-toggle
-            [(ngModel)]="oxAutomaticoActivo"
-            (ionChange)="cambiarEstadoOxigenoAutomatico()"
-            class="switch-ios"
-          ></ion-toggle>
+    <div *ngIf="hasRing">
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <!-- Selector de intervalo + interruptor, en la misma fila -->
+        <div class="fila-info fila-selector">
+          <div class="cabecera-info">
+            <ion-icon
+              name="information-circle-outline"
+              class="color-info"
+            ></ion-icon>
+            <span class="nombre-info">Medición oxígeno nocturna</span>
+          </div>
+          <div class="grupo-selector-switch">
+            <ion-select
+              [(ngModel)]="intervaloOxigenoSeleccionado"
+              interface="popover"
+              class="select-ios"
+              [interfaceOptions]="{ cssClass: 'popover-oxigeno' }"
+            >
+              <ion-select-option [value]="5">5 min</ion-select-option>
+              <ion-select-option [value]="10">10 min</ion-select-option>
+              <ion-select-option [value]="15">15 min</ion-select-option>
+              <ion-select-option [value]="30">30 min</ion-select-option>
+              <ion-select-option [value]="60">60 min</ion-select-option>
+              <ion-select-option [value]="120">120 min</ion-select-option>
+            </ion-select>
+
+            <ion-toggle
+              [(ngModel)]="oxAutomaticoActivo"
+              (ionChange)="cambiarEstadoOxigenoAutomatico()"
+              class="switch-ios"
+            ></ion-toggle>
+          </div>
         </div>
       </div>
+
+      <!-- Control del dispositivo -->
+      <ion-button
+        expand="block"
+        fill="outline"
+        color="danger"
+        (click)="clearHistData()"
+        class="ion-margin-top"
+      >
+        Limpiar históricos
+      </ion-button>
+      <ion-button
+        expand="block"
+        fill="outline"
+        color="danger"
+        (click)="restoreFactorySettings()"
+        class="ion-margin-top"
+      >
+        Restaurar ajustes de fábrica
+      </ion-button>
+      <ion-button
+        expand="block"
+        fill="outline"
+        color="danger"
+        (click)="deviceRestart()"
+        class="ion-margin-top"
+      >
+        Reiniciar dispositivo
+      </ion-button>
+      <ion-button
+        expand="block"
+        fill="outline"
+        color="danger"
+        (click)="shutdown()"
+        class="ion-margin-top"
+      >
+        Apagar
+      </ion-button>
+      <ion-button
+        expand="block"
+        fill="outline"
+        color="danger"
+        (click)="disconnecting()"
+        class="ion-margin-top"
+      >
+        Desconectar
+      </ion-button>
+      <ion-button
+        expand="block"
+        color="danger"
+        (click)="unbinding()"
+        class="ion-margin-top"
+      >
+        Desvincular
+      </ion-button>
     </div>
-
-    <!-- HISTÓRICOS — una gráfica por variable, siempre visibles -->
-
-    <ion-segment
-      [(ngModel)]="rangoGraficasSeleccionado"
-      (ionChange)="cambiarRangoGraficas()"
-      class="segmento-rango"
-    >
-      <ion-segment-button value="24h">
-        <ion-label>24h</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="7d">
-        <ion-label>7 días</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="30d">
-        <ion-label>30 días</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="todo">
-        <ion-label>Todo</ion-label>
-      </ion-segment-button>
-    </ion-segment>
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">Pulso</p>
-      <canvas id="graficaHeartRate"></canvas>
-    </div>
-
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">HRV</p>
-      <canvas id="graficaHRV"></canvas>
-    </div>
-
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">Oxígeno en Sangre</p>
-      <canvas id="graficaOx"></canvas>
-    </div>
-
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">Temperatura</p>
-      <canvas id="graficaTemperature"></canvas>
-    </div>
-
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">Pasos</p>
-      <canvas id="graficaStep"></canvas>
-    </div>
-
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">Movimiento</p>
-      <canvas id="graficaMotion"></canvas>
-    </div>
-
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">Batería</p>
-      <canvas id="graficaBatteryLevel"></canvas>
-    </div>
-
-    <div class="tarjeta-grafica">
-      <p class="titulo-grafica">Evolución Pulso en Reposo</p>
-      <div style="position: relative; height: 30vh; width: 100%">
-        <canvas id="graficaRestingHR"></canvas>
-      </div>
-    </div>
-
-    <!-- Control del dispositivo -->
-    <ion-button
-      expand="block"
-      fill="outline"
-      color="danger"
-      (click)="clearHistData()"
-      class="ion-margin-top"
-    >
-      Limpiar históricos
-    </ion-button>
-    <ion-button
-      expand="block"
-      fill="outline"
-      color="danger"
-      (click)="restoreFactorySettings()"
-      class="ion-margin-top"
-    >
-      Restaurar ajustes de fábrica
-    </ion-button>
-    <ion-button
-      expand="block"
-      fill="outline"
-      color="danger"
-      (click)="deviceRestart()"
-      class="ion-margin-top"
-    >
-      Reiniciar dispositivo
-    </ion-button>
-    <ion-button
-      expand="block"
-      fill="outline"
-      color="danger"
-      (click)="shutdown()"
-      class="ion-margin-top"
-    >
-      Apagar
-    </ion-button>
-    <ion-button
-      expand="block"
-      fill="outline"
-      color="danger"
-      (click)="disconnecting()"
-      class="ion-margin-top"
-    >
-      Desconectar
-    </ion-button>
-    <ion-button
-      expand="block"
-      color="danger"
-      (click)="unbinding()"
-      class="ion-margin-top"
-    >
-      Desvincular
-    </ion-button>
   </div>
 </ion-content>

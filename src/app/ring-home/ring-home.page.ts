@@ -7,20 +7,30 @@ import {
   IonHeader,
   IonTitle,
   IonToolbar,
-  IonCard,
-  IonCardContent,
   IonButton,
+  IonSpinner,
   IonIcon,
   IonToggle,
   IonSelect,
   IonSelectOption,
-  IonSegmentButton,
-  IonSegment,
-  IonLabel,
 } from '@ionic/angular/standalone';
 import { RingBluetooth } from '../services/ring-bluetooth';
 import { timemgt } from '../constants/aux-funct';
-import Chart from 'chart.js/auto';
+import { GraficaHistoricoComponent } from '../components/grafica-historico/grafica-historico.component';
+import { SegmentoIosComponent } from '../components/segmento-ios/segmento-ios.component';
+import {
+  EstadoConexion,
+  EstadoConexionComponent,
+} from '../components/estado-conexion/estado-conexion.component';
+import {
+  COLORES_METRICA,
+  DefinicionGrafica,
+  OPCIONES_RANGO,
+  PuntoGrafica,
+  RangoGrafica,
+  aPuntos,
+  calcularFechaDesde,
+} from '../constants/graficas';
 import { addIcons } from 'ionicons';
 import {
   heartOutline,
@@ -34,6 +44,12 @@ import {
   informationCircleOutline,
 } from 'ionicons/icons';
 
+/**
+ * Tiempo máximo que se muestra "Midiendo…" sin recibir respuesta del anillo.
+ * El SDK no avisa si el anillo deja de responder, así que hace falta un límite.
+ */
+const TIEMPO_MAXIMO_MEDICION_MS = 60_000;
+
 @Component({
   selector: 'app-ring-home',
   templateUrl: './ring-home.page.html',
@@ -44,29 +60,34 @@ import {
     IonHeader,
     IonTitle,
     IonToolbar,
-    IonCard,
-    IonCardContent,
     IonButton,
+    IonSpinner,
     IonIcon,
     IonSelect,
     IonToggle,
     IonSelectOption,
     CommonModule,
     FormsModule,
-    IonSegmentButton,
-    IonSegment,
-    IonLabel,
+    GraficaHistoricoComponent,
+    SegmentoIosComponent,
+    EstadoConexionComponent,
   ],
 })
 export class RingHomePage implements OnInit {
-  // CONTROL DE VISTA (pestañas internas: info / vivo / históricos / usuario)
-  vistaActual: string = 'info';
+  // SECCIÓN VISIBLE (segmento de la cabecera)
+  seccion: 'medidas' | 'historicos' | 'dispositivo' = 'medidas';
+  readonly secciones = [
+    { valor: 'medidas', texto: 'Medidas' },
+    { valor: 'historicos', texto: 'Históricos' },
+    { valor: 'dispositivo', texto: 'Dispositivo' },
+  ];
 
   // VARIABLES DE CONEXIÓN
   ringName: string = ''; // Nombre del anillo una vez conectado
   ringID: string = ''; // ID Bluetooth del anillo
   connected: boolean = false; // Si está conectado en este momento
   hasRing: boolean = false; // Si ya tenemos un anillo vinculado guardado
+  buscando: boolean = false; // Si hay un escaneo/conexión manual en curso
 
   // VARIABLES DE MEDICIÓN EN VIVO
   pulso: number | string = '---';
@@ -75,6 +96,11 @@ export class RingHomePage implements OnInit {
   bateria: number | string = '---'; // Porcentaje de batería
   estadobateria: string = '--'; // Si está cargando o no
   temperatura: number | string = '--';
+
+  // Medición puntual en curso (para mostrar "Midiendo…") y error de la última
+  midiendo: 'pulso' | 'oxigeno' | 'temperatura' | null = null;
+  errorMedicion: string | null = null;
+  private temporizadorMedicion: any;
 
   // VARIABLES DE INFORMACIÓN DEL DISPOSITIVO
   bleAddress: string = '--';
@@ -91,13 +117,6 @@ export class RingHomePage implements OnInit {
   registerNum: number = 0; // Número de registros históricos disponibles
   isHistData: boolean = false;
   medicalHist: any[] = []; // Array con todos los registros históricos válidos
-  public histChart_hearRate: any;
-  public histChart_HRV: any;
-  public histChart_motion: any;
-  public histChart_temperature: any;
-  public histChart_step: any;
-  public histChart_ox: any;
-  public histChart_baterryLevel: any;
 
   // VARIABLES DE SUEÑO
   deepSleepTime: number | string = '--';
@@ -109,7 +128,6 @@ export class RingHomePage implements OnInit {
 
   // VARIABLES DE PULSO EN REPOSO
   restingHeartRate: number | string = '--';
-  public chartRestingHearRate: any;
 
   // VARIABLES DE MODO DEPORTE
   isSportMode: boolean = false;
@@ -126,8 +144,65 @@ export class RingHomePage implements OnInit {
   //VARIABLES CONFIGURACIÓN
   intervaloOxigenoSeleccionado: number = 15; // Minutos entre mediciones automáticas de oxígeno (0:00-6:00)
 
-  // Rango de fechas seleccionado para las gráficas de datos guardados
-  rangoGraficasSeleccionado: '24h' | '7d' | '30d' | 'todo' = '7d';
+  // VARIABLES DE GRÁFICAS DE HISTÓRICOS
+  rangoGraficasSeleccionado: RangoGrafica = '7d';
+  readonly opcionesRango = OPCIONES_RANGO;
+
+  // Gráficas que se muestran, en orden; sus puntos se guardan en "puntosGraficas"
+  readonly graficas: DefinicionGrafica[] = [
+    {
+      clave: 'pulso',
+      titulo: 'Pulso',
+      unidad: 'lpm',
+      color: COLORES_METRICA.pulso,
+    },
+    {
+      clave: 'hrv',
+      titulo: 'HRV',
+      unidad: 'ms',
+      color: COLORES_METRICA.hrv,
+    },
+    {
+      clave: 'spo2',
+      titulo: 'SpO2',
+      unidad: '%',
+      color: COLORES_METRICA.spo2,
+    },
+    {
+      clave: 'temperatura',
+      titulo: 'Temperatura',
+      unidad: '°C',
+      color: COLORES_METRICA.temperatura,
+    },
+    {
+      clave: 'pasos',
+      titulo: 'Pasos',
+      unidad: 'pasos',
+      color: COLORES_METRICA.pasos,
+      tipo: 'bar',
+    },
+    {
+      clave: 'movimiento',
+      titulo: 'Movimiento',
+      unidad: '',
+      color: COLORES_METRICA.movimiento,
+      tipo: 'bar',
+    },
+    {
+      clave: 'bateria',
+      titulo: 'Batería',
+      unidad: '%',
+      color: COLORES_METRICA.bateria,
+    },
+    {
+      clave: 'reposo',
+      titulo: 'Pulso en reposo',
+      unidad: 'lpm',
+      color: COLORES_METRICA.pulso,
+      tipo: 'bar',
+    },
+  ];
+  puntosGraficas: Partial<Record<string, PuntoGrafica[]>> = {};
 
   //Tipo de medición para no falsear datos guardados
   modoMedicionActual: 'oxigeno' | 'hrv' | null = null;
@@ -162,6 +237,13 @@ export class RingHomePage implements OnInit {
       pulseOutline,
       informationCircleOutline,
     });
+  }
+
+  /** Estado que se muestra en la tarjeta de conexión. */
+  get estadoConexion(): EstadoConexion {
+    if (this.connected) return 'conectado';
+    if (this.buscando) return 'buscando';
+    return this.hasRing ? 'reposo' : 'sin-conectar';
   }
 
   /**
@@ -241,6 +323,7 @@ export class RingHomePage implements OnInit {
 
     // Suscripción a los datos de salud en vivo (pulso, oxígeno, HRV)
     this.ringBLEservice.healthData$.subscribe((data: any) => {
+      this.finalizarMedicion();
       this.pulso = data.heartValue;
       this.oxigeno = data.oxValue;
       this.hrv = data.hrvValue;
@@ -264,6 +347,13 @@ export class RingHomePage implements OnInit {
       this.historialAnilloService.guardarMedicionesEnLote(registrosAGuardar);
     });
 
+    // El anillo no consiguió una lectura estable tras varios intentos
+    this.ringBLEservice.healthDataFallida$.subscribe(() => {
+      this.finalizarMedicion(
+        'No se obtuvo una lectura estable. Mantén el anillo quieto e inténtalo de nuevo.',
+      );
+    });
+
     // Suscripción al estado de la batería
     this.ringBLEservice.batteryData$.subscribe((data: any) => {
       this.bateria = data.batteryPer;
@@ -279,12 +369,14 @@ export class RingHomePage implements OnInit {
 
     // Suscripción a la temperatura del dedo
     this.ringBLEservice.temperatureData$.subscribe((data: any) => {
+      this.finalizarMedicion();
       this.temperatura = data;
       this.cdr.detectChanges();
 
       //Guardado de datos
+      // El SDK la entrega como texto ("36.5"): se guarda como número
       this.historialAnilloService.guardarMedicion('temperatura', {
-        grados: data,
+        grados: Number(data),
       });
     });
 
@@ -354,6 +446,15 @@ export class RingHomePage implements OnInit {
       }
     });
 
+    // La descarga se cortó (el anillo no se pudo reconectar): guardamos lo
+    // recibido, pero NO se borra nada del anillo porque faltan registros
+    this.ringBLEservice.historicalDataAbortada$.subscribe(async () => {
+      await this.historialAnilloService.guardarMedicionesEnLote(
+        this.bufferHistoricoParaGuardar,
+      );
+      this.bufferHistoricoParaGuardar = [];
+    });
+
     // Suscripción a los pasos del día (y cálculo de calorías asociado)
     this.ringBLEservice.stepData$.subscribe((data: any) => {
       if (data && data.stepCount !== undefined) {
@@ -378,161 +479,8 @@ export class RingHomePage implements OnInit {
       this.cargarGraficasDesdeAlmacenamiento();
     });
 
-    // Cargamos las gráficas por primera vez.
-    setTimeout(() => {
-      this.cargarGraficasDesdeAlmacenamiento();
-    }, 300);
-  }
-
-  /**
-   * Crea las 7 gráficas de históricos (pulso, HRV, movimiento,
-   * temperatura, pasos, oxígeno y nivel de batería), buscando cada canvas por su ID.
-   * Se ejecuta solo la primera vez que se descargan históricos.
-   */
-  crearGrafica_historicos() {
-    const lienzoHeartRate = document.getElementById(
-      'graficaHeartRate',
-    ) as HTMLCanvasElement;
-    const lienzoHRV = document.getElementById(
-      'graficaHRV',
-    ) as HTMLCanvasElement;
-    const lienzoMotion = document.getElementById(
-      'graficaMotion',
-    ) as HTMLCanvasElement;
-    const lienzoTemperature = document.getElementById(
-      'graficaTemperature',
-    ) as HTMLCanvasElement;
-    const lienzoStep = document.getElementById(
-      'graficaStep',
-    ) as HTMLCanvasElement;
-    const lienzoOx = document.getElementById('graficaOx') as HTMLCanvasElement;
-    const lienzoBaterryLevel = document.getElementById(
-      'graficaBatteryLevel',
-    ) as HTMLCanvasElement;
-
-    // Si algún canvas no está en el DOM todavía, abortamos sin crear nada
-    if (
-      !lienzoHeartRate ||
-      !lienzoHRV ||
-      !lienzoMotion ||
-      !lienzoStep ||
-      !lienzoOx ||
-      !lienzoTemperature ||
-      !lienzoBaterryLevel
-    )
-      return;
-
-    this.histChart_hearRate = new Chart(lienzoHeartRate, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          { label: 'Pulso (ppm)', data: [], borderColor: 'red', tension: 0.4 },
-        ],
-      },
-      options: { responsive: true },
-    });
-
-    this.histChart_HRV = new Chart(lienzoHRV, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          { label: 'HRV (ms)', data: [], borderColor: 'green', tension: 0.4 },
-        ],
-      },
-      options: { responsive: true },
-    });
-
-    this.histChart_motion = new Chart(lienzoMotion, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          { label: '¿?', data: [], borderColor: 'yellow', tension: 0.4 },
-        ],
-      },
-      options: { responsive: true },
-    });
-
-    this.histChart_temperature = new Chart(lienzoTemperature, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: 'Temperatura',
-            data: [],
-            borderColor: 'orange',
-            tension: 0.4,
-          },
-        ],
-      },
-      options: { responsive: true },
-    });
-
-    this.histChart_step = new Chart(lienzoStep, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          { label: 'Pasos', data: [], borderColor: 'blue', tension: 0.4 },
-        ],
-      },
-      options: { responsive: true },
-    });
-
-    this.histChart_ox = new Chart(lienzoOx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          { label: 'SpO2 (%)', data: [], borderColor: 'cyan', tension: 0.4 },
-        ],
-      },
-      options: { responsive: true },
-    });
-
-    this.histChart_baterryLevel = new Chart(lienzoBaterryLevel, {
-      type: 'bar',
-      data: {
-        labels: [],
-        datasets: [
-          { label: '%', data: [], backgroundColor: 'green', borderRadius: 4 },
-        ],
-      },
-      options: { responsive: true },
-    });
-  }
-
-  /**
-   * Crea la gráfica de evolución del pulso en reposo (una barra por día).
-   */
-  crearGrafica_restingHR() {
-    const lienzo = document.getElementById(
-      'graficaRestingHR',
-    ) as HTMLCanvasElement;
-
-    if (!lienzo) return;
-
-    this.chartRestingHearRate = new Chart(lienzo, {
-      type: 'bar',
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: 'Pulso en reposo (Bpm)',
-            data: [],
-            backgroundColor: 'red',
-            borderRadius: 4,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-      },
-    });
+    // Cargamos las gráficas por primera vez, esté o no conectado el anillo
+    this.cargarGraficasDesdeAlmacenamiento();
   }
 
   /**
@@ -540,6 +488,17 @@ export class RingHomePage implements OnInit {
    * Si es la primera vez, además lo vincula y sincroniza la hora del dispositivo.
    */
   async search4ring() {
+    this.buscando = true;
+    try {
+      await this.buscarYConectarAnillo();
+    } finally {
+      this.buscando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Escaneo y conexión en sí; separado para poder marcar "Buscando…" alrededor. */
+  private async buscarYConectarAnillo() {
     const device = await this.ringBLEservice.scan();
 
     if (device) {
@@ -609,6 +568,7 @@ export class RingHomePage implements OnInit {
    *
    * @param measure - Tipo de medición/consulta a solicitar al anillo.
    * @param registerNumber - Número de registros esperados (solo para históricos).
+   * @returns true si el comando se llegó a enviar al anillo.
    */
   async startMeasuring(
     measure:
@@ -623,9 +583,9 @@ export class RingHomePage implements OnInit {
       | 'historicalNum'
       | 'step',
     registerNumber: number = 0,
-  ) {
+  ): Promise<boolean> {
     const savedID = localStorage.getItem('anillo_vinculado');
-    if (!savedID) return;
+    if (!savedID) return false;
 
     if (!this.connected) {
       alert('Anillo dormido, intentando despertar');
@@ -633,44 +593,82 @@ export class RingHomePage implements OnInit {
 
       if (!ok) {
         alert('No se pudo conectar al anillo');
-        return;
+        return false;
       }
       await this.ringBLEservice.timesynchro();
       await this.ringBLEservice.receiveData();
     }
     await this.ringBLEservice.activateMeasurements(measure, registerNumber);
+    return true;
+  }
+
+  /**
+   * Lanza una medición puntual mostrando "Midiendo…" en su tarjeta hasta que
+   * llega el resultado, falla, o vence el tiempo máximo de espera.
+   */
+  private async iniciarMedicion(
+    tipo: 'pulso' | 'oxigeno' | 'temperatura',
+    comando: 'openSingleHealth' | 'openHealth' | 'temperature',
+  ) {
+    this.midiendo = tipo;
+    this.errorMedicion = null;
+
+    // Red de seguridad: si el anillo se desconecta no llega respuesta alguna
+    this.temporizadorMedicion = setTimeout(
+      () => this.finalizarMedicion('El anillo no respondió a tiempo.'),
+      TIEMPO_MAXIMO_MEDICION_MS,
+    );
+
+    const enviado = await this.startMeasuring(comando);
+    if (!enviado) this.finalizarMedicion();
+  }
+
+  /** Quita el indicador "Midiendo…" y, si se indica, muestra un error. */
+  private finalizarMedicion(error: string | null = null) {
+    clearTimeout(this.temporizadorMedicion);
+    this.midiendo = null;
+    this.errorMedicion = error;
+    this.cdr.detectChanges();
   }
 
   /** Solicita medición de oxígeno (y pulso) al anillo. */
   async measuringOX() {
-    this.startMeasuring('openHealth');
     this.modoMedicionActual = 'oxigeno';
+    await this.iniciarMedicion('oxigeno', 'openHealth');
   }
 
   /** Solicita medición de HRV (y pulso) al anillo. */
   async measuringHRV() {
-    this.startMeasuring('openSingleHealth');
     this.modoMedicionActual = 'hrv';
+    await this.iniciarMedicion('pulso', 'openSingleHealth');
   }
 
   /** Solicita la temperatura del dedo al anillo. */
   async fingerTemperature() {
-    this.startMeasuring('temperature');
+    await this.iniciarMedicion('temperatura', 'temperature');
   }
 
-  /** Solicita la información 1 del dispositivo (color, tamaño, dirección BLE...). */
-  async measuringInfoDevice1() {
-    this.startMeasuring('deviceInfo1');
+  /**
+   * Solicita toda la información del dispositivo, una petición detrás de otra:
+   * Info 1 (dirección BLE, versión), Info 2 (número de serie, vinculación) e
+   * Info 5 (configuración de pulso y oxígeno).
+   */
+  async actualizarInfoDispositivo() {
+    for (const comando of ['deviceInfo1', 'deviceInfo2', 'deviceInfo5'] as const) {
+      const enviado = await this.startMeasuring(comando);
+      if (!enviado) return; // Sin conexión: no tiene sentido seguir pidiendo
+    }
   }
 
-  /** Solicita la información 2 del dispositivo (número de serie, vinculación...). */
-  async measuringInfoDevice2() {
-    this.startMeasuring('deviceInfo2');
-  }
-
-  /** Solicita la información 5 del dispositivo (config. de pulso y oxígeno). */
-  async measuringInfoDevice5() {
-    this.startMeasuring('deviceInfo5');
+  /**
+   * Cambia de sección. Al entrar en Dispositivo refresca su información, pero
+   * solo si el anillo ya está conectado, para no despertarlo y gastar batería.
+   */
+  cambiarSeccion(seccion: 'medidas' | 'historicos' | 'dispositivo') {
+    this.seccion = seccion;
+    if (seccion === 'dispositivo' && this.connected) {
+      this.actualizarInfoDispositivo();
+    }
   }
 
   /** Solicita el estado de la batería. */
@@ -694,44 +692,12 @@ export class RingHomePage implements OnInit {
   }
 
   /**
-   * Descarga todos los datos históricos: vacía las gráficas existentes
-   * (o las crea si es la primera vez) y solicita el número total de registros,
-   * lo que dispara en cascada la descarga real de cada registro.
+   * Descarga todos los datos históricos del anillo: solicita el número total de
+   * registros, lo que dispara en cascada la descarga real de cada uno.
+   * Las gráficas se actualizan solas al guardarse los registros.
    */
   async downloadHistoricalData() {
     this.medicalHist = [];
-    if (this.histChart_hearRate) {
-      // Si las gráficas ya existen, las vaciamos para no duplicar datos antiguos
-      this.histChart_hearRate.data.labels = [];
-      this.histChart_hearRate.data.datasets[0].data = [];
-      this.histChart_hearRate.update();
-
-      this.histChart_HRV.data.labels = [];
-      this.histChart_HRV.data.datasets[0].data = [];
-      this.histChart_HRV.update();
-
-      this.histChart_motion.data.labels = [];
-      this.histChart_motion.data.datasets[0].data = [];
-      this.histChart_motion.update();
-
-      this.histChart_temperature.data.labels = [];
-      this.histChart_temperature.data.datasets[0].data = [];
-      this.histChart_temperature.update();
-
-      this.histChart_step.data.labels = [];
-      this.histChart_step.data.datasets[0].data = [];
-      this.histChart_step.update();
-
-      this.histChart_ox.data.labels = [];
-      this.histChart_ox.data.datasets[0].data = [];
-      this.histChart_ox.update();
-
-      this.histChart_baterryLevel.data.labels = [];
-      this.histChart_baterryLevel.data.datasets[0].data = [];
-      this.histChart_baterryLevel.update();
-    } else {
-      this.crearGrafica_historicos();
-    }
     this.startMeasuring('historicalNum');
   }
 
@@ -780,7 +746,7 @@ export class RingHomePage implements OnInit {
 
   /**
    * Calcula la evolución del pulso en reposo día a día, a partir del historial
-   * ya descargado, y dibuja/actualiza la gráfica correspondiente.
+   * ya descargado, y la guarda en el histórico local.
    */
   async calculateRestingHeartRate() {
     if (this.medicalHist.length === 0) {
@@ -805,33 +771,15 @@ export class RingHomePage implements OnInit {
       this.restingHeartRate = Math.floor(ultimoRegistro.data);
       this.cdr.detectChanges();
 
-      if (!this.chartRestingHearRate) {
-        this.crearGrafica_restingHR();
-      } else {
-        // Vaciamos la gráfica anterior para no duplicar datos
-        this.chartRestingHearRate.data.labels = [];
-        this.chartRestingHearRate.data.datasets[0].data = [];
-      }
-
-      // Recorremos todo el historial devuelto para pintar la gráfica completa
+      // Guardamos cada día en el histórico local con su fecha real;
+      // la gráfica se redibuja sola al guardarse
       resultado.forEach((diaReposo: any) => {
-        const fecha = new Date(diaReposo.ts);
-        const dia = fecha.getDate().toString().padStart(2, '0');
-        const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
-
-        this.chartRestingHearRate.data.labels.push(`${dia}/${mes}`);
-        this.chartRestingHearRate.data.datasets[0].data.push(
-          Math.floor(diaReposo.data),
-        );
-        // Guardamos también en el histórico local, con la fecha real de ese día
         this.historialAnilloService.guardarMedicion(
           'reposo',
           { bpm: Math.floor(diaReposo.data) },
           diaReposo.ts, // Timestamp del propio día, no el momento actual
         );
       });
-
-      this.chartRestingHearRate.update();
     } else {
       console.log('No hay datos suficientes de pulso en reposo.');
       this.restingHeartRate = '--';
@@ -839,38 +787,17 @@ export class RingHomePage implements OnInit {
   }
 
   /**
-   * Calcula la fecha de inicio según la opción elegida en el selector de rango.
-   */
-  private calcularFechaDesde(): Date {
-    const ahora = new Date();
-    switch (this.rangoGraficasSeleccionado) {
-      case '24h':
-        return new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
-      case '7d':
-        return new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
-      case '30d':
-        return new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
-      case 'todo':
-      default:
-        return new Date(0); // Desde el origen de los tiempos -- incluye todo
-    }
-  }
-
-  /**
-   * Lee del almacenamiento local las 8 métricas guardadas (pulso, hrv, oxígeno,
-   * temperatura, pasos, batería, movimiento, pulso en reposo), filtradas por el
-   * rango de fechas seleccionado, y redibuja las gráficas desde cero.
-   * No depende de que el anillo esté conectado -- lee siempre de lo guardado.
+   * Lee del almacenamiento local las métricas guardadas del anillo dentro del
+   * rango de fechas elegido y actualiza los puntos de cada gráfica.
+   * No depende de que el anillo esté conectado: lee siempre de lo guardado.
    */
   async cargarGraficasDesdeAlmacenamiento() {
-    if (!this.histChart_hearRate) {
-      this.crearGrafica_historicos();
-    }
-    if (!this.chartRestingHearRate) {
-      this.crearGrafica_restingHR();
-    }
-
-    const desde = this.calcularFechaDesde();
+    const desde = calcularFechaDesde(this.rangoGraficasSeleccionado);
+    type TipoAnillo = Parameters<
+      HistorialAnilloService['obtenerHistorialPorTipoYFecha']
+    >[0];
+    const leer = (tipo: TipoAnillo) =>
+      this.historialAnilloService.obtenerHistorialPorTipoYFecha(tipo, desde);
 
     const [
       pulso,
@@ -882,120 +809,34 @@ export class RingHomePage implements OnInit {
       movimiento,
       reposo,
     ] = await Promise.all([
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha('pulso', desde),
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha('hrv', desde),
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha(
-        'oxigeno',
-        desde,
-      ),
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha(
-        'temperatura',
-        desde,
-      ),
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha('pasos', desde),
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha(
-        'bateria',
-        desde,
-      ),
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha(
-        'movimiento',
-        desde,
-      ),
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha(
-        'reposo',
-        desde,
-      ),
+      leer('pulso'),
+      leer('hrv'),
+      leer('oxigeno'),
+      leer('temperatura'),
+      leer('pasos'),
+      leer('bateria'),
+      leer('movimiento'),
+      leer('reposo'),
     ]);
 
-    // Ordenamos cada lista por fecha (más antigua primero) para que la gráfica
-    // se dibuje en orden cronológico correcto
-    const ordenarPorFecha = (lista: any[]) =>
-      lista.sort(
-        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
-      );
-    [
-      pulso,
-      hrv,
-      oxigeno,
-      temperatura,
-      pasos,
-      bateria,
-      movimiento,
-      reposo,
-    ].forEach(ordenarPorFecha);
-
-    // Formatea una fecha ISO al mismo estilo "día/mes hora:min" que usábamos antes
-    const formatearFecha = (fechaISO: string) => {
-      const f = new Date(fechaISO);
-      const dia = f.getDate().toString().padStart(2, '0');
-      const mes = (f.getMonth() + 1).toString().padStart(2, '0');
-      const horas = f.getHours().toString().padStart(2, '0');
-      const mins = f.getMinutes().toString().padStart(2, '0');
-      return `${dia}/${mes} ${horas}:${mins}`;
+    // Las claves coinciden con las de "graficas"
+    this.puntosGraficas = {
+      pulso: aPuntos(pulso, 'bpm'),
+      hrv: aPuntos(hrv, 'ms'),
+      spo2: aPuntos(oxigeno, 'spo2'),
+      temperatura: aPuntos(temperatura, 'grados'),
+      pasos: aPuntos(pasos, 'pasos'),
+      movimiento: aPuntos(movimiento, 'cuenta'),
+      bateria: aPuntos(bateria, 'porcentaje'),
+      reposo: aPuntos(reposo, 'bpm'),
     };
-
-    // Volcamos cada lista en su gráfica, sustituyendo los datos por completo
-    this.histChart_hearRate.data.labels = pulso.map((r) =>
-      formatearFecha(r.fecha),
-    );
-    this.histChart_hearRate.data.datasets[0].data = pulso.map(
-      (r) => r.valores['bpm'],
-    );
-    this.histChart_hearRate.update();
-
-    this.histChart_HRV.data.labels = hrv.map((r) => formatearFecha(r.fecha));
-    this.histChart_HRV.data.datasets[0].data = hrv.map((r) => r.valores['ms']);
-    this.histChart_HRV.update();
-
-    this.histChart_ox.data.labels = oxigeno.map((r) => formatearFecha(r.fecha));
-    this.histChart_ox.data.datasets[0].data = oxigeno.map(
-      (r) => r.valores['spo2'],
-    );
-    this.histChart_ox.update();
-
-    this.histChart_temperature.data.labels = temperatura.map((r) =>
-      formatearFecha(r.fecha),
-    );
-    this.histChart_temperature.data.datasets[0].data = temperatura.map(
-      (r) => r.valores['grados'],
-    );
-    this.histChart_temperature.update();
-
-    this.histChart_step.data.labels = pasos.map((r) => formatearFecha(r.fecha));
-    this.histChart_step.data.datasets[0].data = pasos.map(
-      (r) => r.valores['pasos'],
-    );
-    this.histChart_step.update();
-
-    this.histChart_baterryLevel.data.labels = bateria.map((r) =>
-      formatearFecha(r.fecha),
-    );
-    this.histChart_baterryLevel.data.datasets[0].data = bateria.map(
-      (r) => r.valores['porcentaje'],
-    );
-    this.histChart_baterryLevel.update();
-
-    this.histChart_motion.data.labels = movimiento.map((r) =>
-      formatearFecha(r.fecha),
-    );
-    this.histChart_motion.data.datasets[0].data = movimiento.map(
-      (r) => r.valores['cuenta'],
-    );
-    this.histChart_motion.update();
-
-    this.chartRestingHearRate.data.labels = reposo.map((r) =>
-      formatearFecha(r.fecha),
-    );
-    this.chartRestingHearRate.data.datasets[0].data = reposo.map(
-      (r) => r.valores['bpm'],
-    );
-    this.chartRestingHearRate.update();
 
     this.cdr.detectChanges();
   }
 
   /** Se llama cuando el usuario cambia el selector de rango de fechas. */
-  async cambiarRangoGraficas() {
+  async cambiarRangoGraficas(rango: RangoGrafica) {
+    this.rangoGraficasSeleccionado = rango;
     await this.cargarGraficasDesdeAlmacenamiento();
   }
 
@@ -1058,16 +899,10 @@ export class RingHomePage implements OnInit {
 
   /**
    * Inicia automáticamente la descarga de datos históricos en cuanto hay conexión,
-   * sin esperar a que el usuario pulse ningún botón. Espera un instante para asegurar
-   * que Angular ya ha pintado los <canvas> en el DOM antes de crear las gráficas.
+   * sin esperar a que el usuario pulse ningún botón.
    */
   private iniciarDescargaHistoricosAutomatica() {
-    setTimeout(() => {
-      if (!this.histChart_hearRate) {
-        this.crearGrafica_historicos();
-      }
-      this.startMeasuring('historicalNum');
-    }, 300);
+    this.startMeasuring('historicalNum');
   }
 
   /**

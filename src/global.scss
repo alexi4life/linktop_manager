@@ -36,6 +36,36 @@
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
 @import "@ionic/angular/css/palettes/dark.system.css";
 
+// ===== ESTILOS COMUNES A LAS PÁGINAS DE DISPOSITIVO =====
+
+// Barra de la cabecera con el segmento de secciones (Medidas, Históricos...)
+.barra-secciones {
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --padding-bottom: 8px;
+}
+
+// Separación entre el selector de rango y la primera gráfica
+.selector-rango {
+  margin-bottom: 16px;
+}
+
+// Indicador que sustituye al valor de una tarjeta mientras se mide
+.indicador-midiendo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #007aff;
+
+  ion-spinner {
+    width: 22px;
+    height: 22px;
+    color: #007aff;
+  }
+}
+
 // El popover del selector de oxígeno se inserta fuera del componente (Ionic lo
 // añade al final del <body>), así que su estilo no puede ir en ring-home.page.scss
 // -- tiene que estar aquí, en el CSS global, para que le llegue de verdad.

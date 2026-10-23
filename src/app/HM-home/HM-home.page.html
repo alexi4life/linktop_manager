@@ -2,26 +2,40 @@
   <ion-toolbar>
     <ion-title>Health-monitor</ion-title>
   </ion-toolbar>
+  <!-- Selector de sección, fijo bajo el título -->
+  <ion-toolbar class="barra-secciones">
+    <app-segmento-ios
+      [opciones]="secciones"
+      [valor]="seccion"
+      (valorChange)="seccion = $event"
+    ></app-segmento-ios>
+  </ion-toolbar>
 </ion-header>
 
 <ion-content class="ion-padding">
-  <!-- Estado de conexión Bluetooth -->
-  <ion-card class="tarjeta-estado">
-    <ion-card-content class="ion-text-center">
-      <p class="texto-estado">{{ estadoBluetooth }}</p>
-    </ion-card-content>
-  </ion-card>
+  <app-estado-conexion
+    [estado]="estadoConexion"
+    [detalle]="nombreDispositivo"
+  ></app-estado-conexion>
 
-  <!-- Pantalla de conexión inicial -->
-  <div *ngIf="!conectado" class="ion-text-center ion-margin-top">
-    <ion-button expand="block" class="boton-ios" (click)="buscarDispositivo()">
-      Buscar y Conectar Monitor
-    </ion-button>
-  </div>
+  <!-- ===== SECCIÓN MEDIDAS =====
+       Se oculta en vez de eliminarse para no perder el canvas del ECG
+       si el usuario cambia de sección durante una medición -->
+  <div [hidden]="seccion !== 'medidas'">
+    <!-- Pantalla de conexión inicial -->
+    <div *ngIf="!conectado" class="ion-text-center ion-margin-top">
+      <ion-button
+        expand="block"
+        class="boton-ios"
+        (click)="buscarDispositivo()"
+        [disabled]="estadoConexion === 'buscando'"
+      >
+        Buscar y Conectar Monitor
+      </ion-button>
+    </div>
 
-  <div *ngIf="conectado">
     <!-- Cuadrícula de tarjetas de sensores, estilo Apple Health -->
-    <div class="cuadricula-sensores">
+    <div *ngIf="conectado" class="cuadricula-sensores">
       <!-- TARJETA: Temperatura -->
       <div class="tarjeta-sensor">
         <div class="cabecera-sensor">
@@ -32,22 +46,30 @@
           <span class="nombre-sensor">Temperatura</span>
         </div>
 
-        <div class="valor-sensor" [class.valor-vacio]="temperatura === null">
-          <ng-container *ngIf="temperatura !== null; else vacioBT">
-            {{ temperatura }}<span class="unidad-sensor">°C</span>
-          </ng-container>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="temperatura === null && !midiendoBT"
+        >
+          <span *ngIf="midiendoBT; else valorBT" class="indicador-midiendo">
+            <ion-spinner name="crescent"></ion-spinner>Midiendo…
+          </span>
+          <ng-template #valorBT>
+            <ng-container *ngIf="temperatura !== null; else vacioBT">
+              {{ temperatura }}<span class="unidad-sensor">°C</span>
+            </ng-container>
+          </ng-template>
           <ng-template #vacioBT>—</ng-template>
         </div>
 
+        <!-- La temperatura es una lectura corta: no tiene opción de detener -->
         <div class="boton-medir">
           <ion-button
             expand="block"
             class="boton-ios"
             (click)="medirBT()"
-            [disabled]="midiendoBT || midiendoOX || midiendoBP || midiendoECG"
+            [disabled]="hayMedicionEnCurso"
           >
-            <ion-spinner *ngIf="midiendoBT" name="crescent"></ion-spinner>
-            <span *ngIf="!midiendoBT">Medir</span>
+            Medir
           </ion-button>
         </div>
       </div>
@@ -88,11 +110,23 @@
           <span class="nombre-sensor">Oxígeno en Sangre</span>
         </div>
 
-        <div class="valor-sensor" [class.valor-vacio]="spo2 === null">
-          <ng-container *ngIf="spo2 !== null && pulso !== null; else vacioOX">
-            {{ spo2 | number:'1.0-0' }}<span class="unidad-sensor">% SpO2</span>
-            &nbsp;&nbsp; {{ pulso }}<span class="unidad-sensor">ppm</span>
-          </ng-container>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="spo2 === null && !midiendoOX"
+        >
+          <span *ngIf="midiendoOX; else valorOX" class="indicador-midiendo">
+            <ion-spinner name="crescent"></ion-spinner>Midiendo…
+          </span>
+          <ng-template #valorOX>
+            <ng-container
+              *ngIf="spo2 !== null && pulso !== null; else vacioOX"
+            >
+              {{ spo2 | number:'1.0-0' }}<span class="unidad-sensor"
+                >% SpO2</span
+              >
+              &nbsp;&nbsp; {{ pulso }}<span class="unidad-sensor">ppm</span>
+            </ng-container>
+          </ng-template>
           <ng-template #vacioOX>—</ng-template>
         </div>
 
@@ -112,15 +146,16 @@
           {{ errorOxigeno }}
         </p>
 
+        <!-- Botón único: mide o, si ya está midiendo, detiene -->
         <div class="boton-medir">
           <ion-button
             expand="block"
             class="boton-ios"
-            (click)="medirOX()"
-            [disabled]="midiendoBT || midiendoOX || midiendoBP || midiendoECG"
+            [class.boton-detener]="midiendoOX"
+            (click)="midiendoOX ? cancelarMedicion() : medirOX()"
+            [disabled]="hayMedicionEnCurso && !midiendoOX"
           >
-            <ion-spinner *ngIf="midiendoOX" name="crescent"></ion-spinner>
-            <span *ngIf="!midiendoOX">Medir</span>
+            {{ midiendoOX ? 'Detener' : 'Medir' }}
           </ion-button>
         </div>
       </div>
@@ -134,17 +169,22 @@
 
         <div
           class="valor-sensor"
-          [class.valor-vacio]="presionSistolica === null"
+          [class.valor-vacio]="presionSistolica === null && !midiendoBP"
         >
-          <ng-container
-            *ngIf="presionSistolica !== null && presionDiastolica !== null; else vacioBP"
-          >
-            {{ presionSistolica }}/{{ presionDiastolica }}<span
-              class="unidad-sensor"
-              >mmHg</span
+          <span *ngIf="midiendoBP; else valorBP" class="indicador-midiendo">
+            <ion-spinner name="crescent"></ion-spinner>Midiendo…
+          </span>
+          <ng-template #valorBP>
+            <ng-container
+              *ngIf="presionSistolica !== null && presionDiastolica !== null; else vacioBP"
             >
-            &nbsp;&nbsp; {{ pulsoBP }}<span class="unidad-sensor">ppm</span>
-          </ng-container>
+              {{ presionSistolica }}/{{ presionDiastolica }}<span
+                class="unidad-sensor"
+                >mmHg</span
+              >
+              &nbsp;&nbsp; {{ pulsoBP }}<span class="unidad-sensor">ppm</span>
+            </ng-container>
+          </ng-template>
           <ng-template #vacioBP>—</ng-template>
         </div>
 
@@ -162,11 +202,11 @@
           <ion-button
             expand="block"
             class="boton-ios"
-            (click)="medirBP()"
-            [disabled]="midiendoBP || midiendoBT || midiendoOX || midiendoECG"
+            [class.boton-detener]="midiendoBP"
+            (click)="midiendoBP ? cancelarMedicion() : medirBP()"
+            [disabled]="hayMedicionEnCurso && !midiendoBP"
           >
-            <ion-spinner *ngIf="midiendoBP" name="crescent"></ion-spinner>
-            <span *ngIf="!midiendoBP">Medir</span>
+            {{ midiendoBP ? 'Detener' : 'Medir' }}
           </ion-button>
         </div>
       </div>
@@ -178,14 +218,22 @@
           <span class="nombre-sensor">Electrocardiograma</span>
         </div>
 
-        <div class="valor-sensor" [class.valor-vacio]="ecgHR === null">
-          <ng-container *ngIf="ecgHR !== null; else vacioECG">
-            {{ ecgHR | number:'1.0-0' }}<span class="unidad-sensor">ppm</span>
-            &nbsp;&nbsp; {{ ecgHRV | number:'1.0-0' }}<span
-              class="unidad-sensor"
-              >HRV</span
-            >
-          </ng-container>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="ecgHR === null && !midiendoECG"
+        >
+          <span *ngIf="midiendoECG; else valorECG" class="indicador-midiendo">
+            <ion-spinner name="crescent"></ion-spinner>Midiendo…
+          </span>
+          <ng-template #valorECG>
+            <ng-container *ngIf="ecgHR !== null; else vacioECG">
+              {{ ecgHR | number:'1.0-0' }}<span class="unidad-sensor">ppm</span>
+              &nbsp;&nbsp; {{ ecgHRV | number:'1.0-0' }}<span
+                class="unidad-sensor"
+                >HRV</span
+              >
+            </ng-container>
+          </ng-template>
           <ng-template #vacioECG>—</ng-template>
         </div>
 
@@ -216,83 +264,34 @@
           <ion-button
             expand="block"
             class="boton-ios"
-            (click)="medirECG()"
-            [disabled]="midiendoECG || midiendoBT || midiendoOX || midiendoBP"
+            [class.boton-detener]="midiendoECG"
+            (click)="midiendoECG ? cancelarMedicion() : medirECG()"
+            [disabled]="hayMedicionEnCurso && !midiendoECG"
           >
-            <ion-spinner *ngIf="midiendoECG" name="crescent"></ion-spinner>
-            <span *ngIf="!midiendoECG">Medir</span>
+            {{ midiendoECG ? 'Detener' : 'Medir' }}
           </ion-button>
         </div>
       </div>
     </div>
-
-    <!-- Botón cancelar — solo visible durante mediciones largas -->
-    <ion-button
-      expand="block"
-      fill="outline"
-      color="danger"
-      (click)="cancelarMedicion()"
-      *ngIf="midiendoOX || midiendoBP || midiendoECG"
-      class="boton-cancelar"
-    >
-      Cancelar medición
-    </ion-button>
   </div>
 
-  <!-- Selector de rango de fechas para las gráficas de datos guardados -->
-  <ion-segment
-    [(ngModel)]="rangoGraficasSeleccionado"
-    (ionChange)="cambiarRangoGraficas()"
-    class="segmento-rango"
-  >
-    <ion-segment-button value="24h"
-      ><ion-label>24h</ion-label></ion-segment-button
-    >
-    <ion-segment-button value="7d"
-      ><ion-label>7 días</ion-label></ion-segment-button
-    >
-    <ion-segment-button value="30d"
-      ><ion-label>30 días</ion-label></ion-segment-button
-    >
-    <ion-segment-button value="todo"
-      ><ion-label>Todo</ion-label></ion-segment-button
-    >
-  </ion-segment>
+  <!-- ===== SECCIÓN HISTÓRICOS =====
+       Datos guardados en local, visibles aunque el monitor no esté conectado -->
+  <div *ngIf="seccion === 'historicos'">
+    <app-segmento-ios
+      class="selector-rango"
+      [opciones]="opcionesRango"
+      [valor]="rangoGraficasSeleccionado"
+      (valorChange)="cambiarRangoGraficas($event)"
+    ></app-segmento-ios>
 
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">Temperatura</p>
-    <canvas id="graficaTemperatura"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">SpO2</p>
-    <canvas id="graficaSpo2"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">Pulso (Oxígeno)</p>
-    <canvas id="graficaPulsoOxigeno"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">Presión Sistólica</p>
-    <canvas id="graficaSistolica"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">Presión Diastólica</p>
-    <canvas id="graficaDiastolica"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">Pulso (Presión)</p>
-    <canvas id="graficaPulsoPresion"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">ECG - HR</p>
-    <canvas id="graficaEcgHR"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">ECG - HRV</p>
-    <canvas id="graficaEcgHRV"></canvas>
-  </div>
-  <div class="tarjeta-grafica">
-    <p class="titulo-grafica">Batería</p>
-    <canvas id="graficaBateria"></canvas>
+    <app-grafica-historico
+      *ngFor="let grafica of graficas"
+      [titulo]="grafica.titulo"
+      [unidad]="grafica.unidad"
+      [color]="grafica.color"
+      [tipo]="grafica.tipo ?? 'line'"
+      [puntos]="puntosGraficas[grafica.clave] ?? []"
+    ></app-grafica-historico>
   </div>
 </ion-content>

@@ -1,0 +1,11 @@
+// Tarjeta blanca con el estilo iOS de las páginas
+.tarjeta-estado {
+  background: var(--color-tarjeta, #ffffff);
+  border-radius: var(--radio-tarjeta, 20px);
+  box-shadow: var(--sombra-tarjeta, 0 2px 10px rgba(0, 0, 0, 0.06));
+  margin: 0 0 16px;
+  padding: 16px;
+  font-size: 0.9rem;
+  color: var(--color-texto-secundario, #8e8e93);
+  text-align: center;
+}

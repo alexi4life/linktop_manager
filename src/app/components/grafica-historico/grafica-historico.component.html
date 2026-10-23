@@ -1,0 +1,15 @@
+<div class="tarjeta-grafica">
+  <div class="cabecera-grafica">
+    <span class="titulo-grafica" [style.color]="color">{{ titulo }}</span>
+    <span class="ultimo-valor" *ngIf="ultimoValor !== null">
+      {{ ultimoValor }} <span class="unidad">{{ unidad }}</span>
+    </span>
+  </div>
+
+  <!-- El canvas se oculta en vez de eliminarse para conservar la gráfica creada -->
+  <div class="contenedor-lienzo" [hidden]="!puntos.length">
+    <canvas #lienzo></canvas>
+  </div>
+
+  <p class="sin-datos" *ngIf="!puntos.length">Sin datos en este periodo</p>
+</div>

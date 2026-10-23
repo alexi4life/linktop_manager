@@ -17,11 +17,6 @@ import { pulseOutline, fingerPrintOutline } from 'ionicons/icons';
 })
 export class TabsPage {
   constructor() {
-    addIcons({
-      pulseOutline,
-      fingerPrintOutline,
-      pulseOutline: pulseOutline,
-      fingerPrintOutline: fingerPrintOutline,
-    });
+    addIcons({ pulseOutline, fingerPrintOutline });
   }
 }

@@ -1,0 +1,5 @@
+<ion-segment [value]="valor" (ionChange)="cambiar($any($event.detail.value))">
+  <ion-segment-button *ngFor="let opcion of opciones" [value]="opcion.valor">
+    <ion-label>{{ opcion.texto }}</ion-label>
+  </ion-segment-button>
+</ion-segment>
