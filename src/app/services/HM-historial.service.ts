@@ -88,6 +88,29 @@ export class HistorialService {
   }
 
   /**
+   * Devuelve los registros dentro de un rango de fechas, agrupados por tipo.
+   * Lee el almacén UNA sola vez, en lugar de una lectura por cada tipo; es lo
+   * que usan las gráficas, que necesitan todos los tipos a la vez.
+   *
+   * @param desde - Fecha de inicio del rango (inclusive).
+   * @param hasta - Fecha de fin del rango (inclusive). Por defecto, el momento actual.
+   */
+  async obtenerAgrupadoPorTipo(
+    desde: Date,
+    hasta: Date = new Date(),
+  ): Promise<Partial<Record<RegistroMedicion['tipo'], RegistroMedicion[]>>> {
+    const agrupado: Partial<
+      Record<RegistroMedicion['tipo'], RegistroMedicion[]>
+    > = {};
+    for (const registro of await this.obtenerHistorial()) {
+      const fecha = new Date(registro.fecha);
+      if (fecha < desde || fecha > hasta) continue;
+      (agrupado[registro.tipo] ??= []).push(registro);
+    }
+    return agrupado;
+  }
+
+  /**
    * Recupera solo la última medición guardada de un tipo concreto.
    * Útil para mostrar "tu última temperatura" sin tener que filtrar todo el historial cada vez.
    *

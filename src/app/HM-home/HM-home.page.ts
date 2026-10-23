@@ -1,4 +1,14 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  ChangeDetectorRef,
+  DestroyRef,
+  ElementRef,
+  ViewChild,
+  inject,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { debounceTime } from 'rxjs';
 import {
   IonHeader,
   IonToolbar,
@@ -96,6 +106,7 @@ export class HomePage implements OnInit {
   errorECG: string | null = null;
   puntosECG: number[] = [];
   private ecgAnimacionActiva: boolean = false;
+  private lienzoECG?: HTMLCanvasElement;
   ecgHR: number | null = null;
   ecgHRV: number | null = null;
   dedoPuestoECG: boolean = true;
@@ -163,10 +174,20 @@ export class HomePage implements OnInit {
   ];
   puntosGraficas: Partial<Record<string, PuntoGrafica[]>> = {};
 
-  public glucosa: any; // TODO - Queda pendiente de analizar
-
   // Medición activa para poder detenerla
   medicionActiva: 'OX' | 'BP' | 'BG' | 'BT' | 'ECG' | 'BATTERY' | null = null;
+
+  // Para cerrar las suscripciones automáticamente si la página se destruye
+  private destroyRef = inject(DestroyRef);
+
+  /** Angular lo llama al crear o eliminar el canvas del ECG (está dentro de un *ngIf). */
+  @ViewChild('canvasECG') set canvasECG(
+    ref: ElementRef<HTMLCanvasElement> | undefined,
+  ) {
+    this.lienzoECG = ref?.nativeElement;
+    // Resolución interna igual al ancho real, para que la onda no se deforme
+    if (this.lienzoECG) this.lienzoECG.width = this.lienzoECG.offsetWidth;
+  }
 
   constructor(
     private LTS: LinktopService,
@@ -193,10 +214,11 @@ export class HomePage implements OnInit {
     const respuesta = await this.LTS.inicializarBluetooth();
     if (respuesta.includes('Error')) this.estadoConexion = 'error';
 
-    // Cada vez que se guarda algo nuevo, redibujamos las gráficas automáticamente
-    this.historial.datosActualizados$.subscribe(() => {
-      this.cargarGraficasDesdeAlmacenamiento();
-    });
+    // Cada vez que se guarda algo nuevo, redibujamos las gráficas automáticamente.
+    // Si llegan varios guardados seguidos, se agrupan en una sola recarga
+    this.historial.datosActualizados$
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.cargarGraficasDesdeAlmacenamiento());
 
     // Cargamos las gráficas por primera vez, esté o no conectado el monitor
     this.cargarGraficasDesdeAlmacenamiento();
@@ -376,15 +398,8 @@ export class HomePage implements OnInit {
 
     this.bucleECG();
 
-    setTimeout(() => {
-      const canvas = document.getElementById('canvasECG') as HTMLCanvasElement;
-      if (canvas) {
-        canvas.width = canvas.offsetWidth;
-      }
-    }, 100);
-
     this.LTS.medicionECG(
-      (valor, muestra) => {
+      (valor) => {
         this.puntosECG.push(valor);
       },
       () => {
@@ -432,7 +447,7 @@ export class HomePage implements OnInit {
 
   /** Pinta en el canvas los últimos 1200 puntos de la onda del ECG, autoescalados. */
   dibujarECG() {
-    const canvas = document.getElementById('canvasECG') as HTMLCanvasElement;
+    const canvas = this.lienzoECG;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
@@ -490,10 +505,6 @@ export class HomePage implements OnInit {
     ctx.stroke();
   }
 
-  async verHistorialDebug() {
-    const historial = await this.historial.obtenerHistorial();
-  }
-
   /**
    * Lee del almacenamiento local las métricas guardadas dentro del rango de
    * fechas elegido y actualiza los puntos de cada gráfica.
@@ -502,13 +513,14 @@ export class HomePage implements OnInit {
   async cargarGraficasDesdeAlmacenamiento() {
     const desde = calcularFechaDesde(this.rangoGraficasSeleccionado);
 
-    const [temperatura, oxigeno, presion, ecg, bateria] = await Promise.all([
-      this.historial.obtenerHistorialPorTipoYFecha('temperatura', desde),
-      this.historial.obtenerHistorialPorTipoYFecha('oxigeno', desde),
-      this.historial.obtenerHistorialPorTipoYFecha('presion', desde),
-      this.historial.obtenerHistorialPorTipoYFecha('ecg', desde),
-      this.historial.obtenerHistorialPorTipoYFecha('bateria', desde),
-    ]);
+    // Una sola lectura del almacén para todas las gráficas
+    const {
+      temperatura = [],
+      oxigeno = [],
+      presion = [],
+      ecg = [],
+      bateria = [],
+    } = await this.historial.obtenerAgrupadoPorTipo(desde);
 
     // Las claves coinciden con las de "graficas"
     this.puntosGraficas = {

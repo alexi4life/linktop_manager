@@ -169,6 +169,31 @@ export class HistorialAnilloService {
     return delTipo[0];
   }
 
+  /**
+   * Devuelve los registros dentro de un rango de fechas, agrupados por tipo.
+   * Lee el almacén UNA sola vez, en lugar de una lectura por cada tipo; es lo
+   * que usan las gráficas, que necesitan todos los tipos a la vez.
+   *
+   * @param desde - Fecha de inicio del rango (inclusive)
+   * @param hasta - Fecha de fin del rango (inclusive). Por defecto, el momento actual.
+   */
+  async obtenerAgrupadoPorTipo(
+    desde: Date,
+    hasta: Date = new Date(),
+  ): Promise<
+    Partial<Record<RegistroMedicionAnillo['tipo'], RegistroMedicionAnillo[]>>
+  > {
+    const agrupado: Partial<
+      Record<RegistroMedicionAnillo['tipo'], RegistroMedicionAnillo[]>
+    > = {};
+    for (const registro of await this.obtenerHistorialCompleto()) {
+      const fecha = new Date(registro.fecha);
+      if (fecha < desde || fecha > hasta) continue;
+      (agrupado[registro.tipo] ??= []).push(registro);
+    }
+    return agrupado;
+  }
+
   /** Borra todo el historial guardado del anillo. Acción irreversible. */
   async borrarHistorial(): Promise<void> {
     await Preferences.remove({ key: CLAVE_ALMACEN });

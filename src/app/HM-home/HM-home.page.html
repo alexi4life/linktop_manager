@@ -1,6 +1,6 @@
 <ion-header>
   <ion-toolbar>
-    <ion-title>Health-monitor</ion-title>
+    <ion-title>Linktop</ion-title>
   </ion-toolbar>
   <!-- Selector de sección, fijo bajo el título -->
   <ion-toolbar class="barra-secciones">
@@ -30,7 +30,7 @@
         (click)="buscarDispositivo()"
         [disabled]="estadoConexion === 'buscando'"
       >
-        Buscar y Conectar Monitor
+        Buscar y conectar monitor
       </ion-button>
     </div>
 
@@ -108,7 +108,7 @@
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
           <ion-icon name="water-outline" class="color-oxigeno"></ion-icon>
-          <span class="nombre-sensor">Oxígeno en Sangre</span>
+          <span class="nombre-sensor">Oxígeno en sangre</span>
         </div>
 
         <div
@@ -126,7 +126,7 @@
               {{ spo2 | number:'1.0-0' }}<span class="unidad-sensor"
                 >% SpO2</span
               >
-              &nbsp;&nbsp; {{ pulso }}<span class="unidad-sensor">ppm</span>
+              &nbsp;&nbsp; {{ pulso }}<span class="unidad-sensor">lpm</span>
             </ng-container>
           </ng-template>
           <ng-template #vacioOX>—</ng-template>
@@ -160,7 +160,7 @@
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
           <ion-icon name="pulse-outline" class="color-presion"></ion-icon>
-          <span class="nombre-sensor">Presión Arterial</span>
+          <span class="nombre-sensor">Presión arterial</span>
         </div>
 
         <div
@@ -178,7 +178,7 @@
                 class="unidad-sensor"
                 >mmHg</span
               >
-              &nbsp;&nbsp; {{ pulsoBP }}<span class="unidad-sensor">ppm</span>
+              &nbsp;&nbsp; {{ pulsoBP }}<span class="unidad-sensor">lpm</span>
             </ng-container>
           </ng-template>
           <ng-template #vacioBP>—</ng-template>
@@ -225,10 +225,10 @@
           ></app-indicador-medicion>
           <ng-template #valorECG>
             <ng-container *ngIf="ecgHR !== null; else vacioECG">
-              {{ ecgHR | number:'1.0-0' }}<span class="unidad-sensor">ppm</span>
+              {{ ecgHR | number:'1.0-0' }}<span class="unidad-sensor">lpm</span>
               &nbsp;&nbsp; {{ ecgHRV | number:'1.0-0' }}<span
                 class="unidad-sensor"
-                >HRV</span
+                >ms HRV</span
               >
             </ng-container>
           </ng-template>
@@ -241,7 +241,7 @@
 
         <!-- Canvas del ECG — visible durante y después de la medición -->
         <div *ngIf="midiendoECG || puntosECG.length > 0" class="contenedor-ecg">
-          <canvas id="canvasECG" height="140"></canvas>
+          <canvas #canvasECG height="140"></canvas>
           <p class="nota-escala">Escala relativa (unidades no calibradas)</p>
         </div>
 

@@ -28,7 +28,7 @@
         (click)="search4ring()"
         [disabled]="buscando"
       >
-        Buscar y Conectar Anillo
+        Buscar y conectar anillo
       </ion-button>
     </div>
 
@@ -42,7 +42,7 @@
         (click)="search4ring()"
         [disabled]="buscando"
       >
-        Reconectar Anillo
+        Reconectar anillo
       </ion-button>
     </div>
 
@@ -66,7 +66,7 @@
             *ngIf="midiendo === 'pulso'; else valorPulso"
           ></app-indicador-medicion>
           <ng-template #valorPulso>
-            {{ pulso }}<span class="unidad-sensor">bpm</span>
+            {{ pulso }}<span class="unidad-sensor">lpm</span>
           </ng-template>
         </div>
         <div class="boton-medir">
@@ -78,7 +78,7 @@
             (click)="midiendo === 'pulso' ? detenerMedicion() : measuringHRV()"
             [disabled]="midiendo !== null && midiendo !== 'pulso'"
           >
-            {{ midiendo === 'pulso' ? 'Detener' : 'Medir HRV' }}
+            {{ midiendo === 'pulso' ? 'Detener' : 'Medir' }}
           </ion-button>
         </div>
       </div>
@@ -87,7 +87,7 @@
       <div class="tarjeta-sensor">
         <div class="cabecera-sensor">
           <ion-icon name="water-outline" class="color-oxigeno"></ion-icon>
-          <span class="nombre-sensor">Oxígeno</span>
+          <span class="nombre-sensor">Oxígeno en sangre</span>
         </div>
         <div
           class="valor-sensor"
@@ -108,7 +108,7 @@
             (click)="midiendo === 'oxigeno' ? detenerMedicion() : measuringOX()"
             [disabled]="midiendo !== null && midiendo !== 'oxigeno'"
           >
-            {{ midiendo === 'oxigeno' ? 'Detener' : 'Medir Oxígeno' }}
+            {{ midiendo === 'oxigeno' ? 'Detener' : 'Medir' }}
           </ion-button>
         </div>
       </div>
@@ -173,7 +173,7 @@
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
           <ion-icon name="walk-outline" class="color-pasos"></ion-icon>
-          <span class="nombre-sensor">Actividad de Hoy</span>
+          <span class="nombre-sensor">Actividad de hoy</span>
         </div>
         <div class="valor-sensor" [class.valor-vacio]="steps === '--'">
           {{ steps }}<span class="unidad-sensor">pasos</span> &nbsp;&nbsp; {{
@@ -190,7 +190,7 @@
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
           <ion-icon name="bicycle-outline" class="color-pasos"></ion-icon>
-          <span class="nombre-sensor">Modo Deporte</span>
+          <span class="nombre-sensor">Modo deporte</span>
         </div>
         <div class="valor-sensor" [class.valor-vacio]="!isSportMode">
           {{ isSportMode ? 'Activo' : '—' }}
@@ -199,6 +199,7 @@
           <ion-button
             expand="block"
             class="boton-ios"
+            [class.boton-detener]="isSportMode"
             (click)="toggleSportMode()"
           >
             {{ isSportMode ? 'Detener' : 'Iniciar' }}
@@ -210,7 +211,7 @@
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
           <ion-icon name="moon-outline" class="color-sueno"></ion-icon>
-          <span class="nombre-sensor">Análisis de Sueño</span>
+          <span class="nombre-sensor">Análisis de sueño</span>
         </div>
         <div class="valor-sensor" [class.valor-vacio]="deepSleepTime === '--'">
           <ng-container *ngIf="deepSleepTime !== '--'; else vacioSueno">
@@ -222,7 +223,7 @@
         </div>
         <div class="boton-medir">
           <ion-button expand="block" class="boton-ios" (click)="sleepdata()"
-            >Analizar Sueño</ion-button
+            >Analizar sueño</ion-button
           >
         </div>
       </div>
@@ -230,8 +231,8 @@
       <!-- Pulso en reposo -->
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
-          <ion-icon name="pulse-outline" class="color-reposo"></ion-icon>
-          <span class="nombre-sensor">Pulso en Reposo</span>
+          <ion-icon name="pulse-outline" class="color-pulso"></ion-icon>
+          <span class="nombre-sensor">Pulso en reposo</span>
         </div>
         <div
           class="valor-sensor"
@@ -240,7 +241,7 @@
           {{ restingHeartRate }}<span
             class="unidad-sensor"
             *ngIf="restingHeartRate !== '--'"
-            >bpm</span
+            >lpm</span
           >
         </div>
         <div class="boton-medir">
@@ -289,7 +290,7 @@
             name="information-circle-outline"
             class="color-info"
           ></ion-icon>
-          <span class="nombre-sensor">Información del Dispositivo</span>
+          <span class="nombre-sensor">Información del dispositivo</span>
         </div>
         <div class="valor-sensor lista-info-dispositivo">
           <div class="fila-info">
@@ -308,15 +309,6 @@
             <span class="etiqueta-info">Vinculación</span>
             <span class="dato-info">{{ bindStatus }}</span>
           </div>
-          <!-- Frecuencia de muestreo (samplingRate) oculta: según el manual (2.5.28), este valor
-         solo tiene sentido como parámetro de configuración del ECG (2=1024Hz, 3=512Hz),
-         no como una medición en vivo. Como no implementamos ECG, mostrarla confunde. -->
-          <!--
-    <div class="fila-info">
-      <span class="etiqueta-info">Frecuencia muestreo</span>
-      <span class="dato-info">{{ samplingRate }}</span>
-    </div>
-    -->
           <div class="fila-info">
             <span class="etiqueta-info">Tiempo medición pulso</span>
             <span class="dato-info">{{ hrMeasurementTime }} s</span>
@@ -350,7 +342,7 @@
               name="information-circle-outline"
               class="color-info"
             ></ion-icon>
-            <span class="nombre-info">Medición oxígeno nocturna</span>
+            <span class="nombre-info">Medición de oxígeno nocturna</span>
           </div>
           <div class="grupo-selector-switch">
             <ion-select
@@ -382,7 +374,7 @@
         fill="outline"
         color="danger"
         (click)="clearHistData()"
-        class="ion-margin-top"
+        class="boton-control"
       >
         Limpiar históricos
       </ion-button>
@@ -391,7 +383,7 @@
         fill="outline"
         color="danger"
         (click)="restoreFactorySettings()"
-        class="ion-margin-top"
+        class="boton-control"
       >
         Restaurar ajustes de fábrica
       </ion-button>
@@ -400,7 +392,7 @@
         fill="outline"
         color="danger"
         (click)="deviceRestart()"
-        class="ion-margin-top"
+        class="boton-control"
       >
         Reiniciar dispositivo
       </ion-button>
@@ -409,7 +401,7 @@
         fill="outline"
         color="danger"
         (click)="shutdown()"
-        class="ion-margin-top"
+        class="boton-control"
       >
         Apagar
       </ion-button>
@@ -418,7 +410,7 @@
         fill="outline"
         color="danger"
         (click)="disconnecting()"
-        class="ion-margin-top"
+        class="boton-control"
       >
         Desconectar
       </ion-button>
@@ -426,7 +418,7 @@
         expand="block"
         color="danger"
         (click)="unbinding()"
-        class="ion-margin-top"
+        class="boton-control"
       >
         Desvincular
       </ion-button>

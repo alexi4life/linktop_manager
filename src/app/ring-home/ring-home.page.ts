@@ -1,4 +1,12 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  ChangeDetectorRef,
+  DestroyRef,
+  inject,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable, debounceTime } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HistorialAnilloService } from '../services/ring-historial.service';
@@ -12,6 +20,7 @@ import {
   IonToggle,
   IonSelect,
   IonSelectOption,
+  ToastController,
 } from '@ionic/angular/standalone';
 import { RingBluetooth } from '../services/ring-bluetooth';
 import { timemgt } from '../constants/aux-funct';
@@ -107,7 +116,6 @@ export class RingHomePage implements OnInit {
   deviceVer: string = '';
   sn: string = '--'; // Número de serie
   bindStatus: string = '--'; // Si está vinculado o no
-  samplingRate: string = '--'; // Frecuencia de muestreo del PPG
   hrMeasurementTime: number | string = '--'; // Tiempo de medición de pulso, en segundos
   oxMeasurementInterval: number | string = '--'; // Intervalo de medición de oxígeno, en minutos
   oxMeasurementSwitch: string = '--'; // Si el oxígeno automático está encendido o no
@@ -115,7 +123,6 @@ export class RingHomePage implements OnInit {
 
   // VARIABLES DE DATOS HISTÓRICOS
   registerNum: number = 0; // Número de registros históricos disponibles
-  isHistData: boolean = false;
   medicalHist: any[] = []; // Array con todos los registros históricos válidos
 
   // VARIABLES DE SUEÑO
@@ -239,6 +246,29 @@ export class RingHomePage implements OnInit {
     });
   }
 
+  // Para cerrar las suscripciones automáticamente si la página se destruye
+  private destroyRef = inject(DestroyRef);
+  private toastCtrl = inject(ToastController);
+
+  /** Muestra un aviso breve estilo iOS, en lugar de la ventana nativa del navegador. */
+  private async avisar(mensaje: string) {
+    const toast = await this.toastCtrl.create({
+      message: mensaje,
+      duration: 2500,
+      position: 'top',
+      mode: 'ios',
+    });
+    await toast.present();
+  }
+
+  /**
+   * Se suscribe a un canal y se da de baja sola al destruirse la página, para
+   * que una página recreada no procese (ni guarde) cada dato dos veces.
+   */
+  private escuchar<T>(canal$: Observable<T>, accion: (dato: T) => void) {
+    canal$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(accion);
+  }
+
   /** Estado que se muestra en la tarjeta de conexión. */
   get estadoConexion(): EstadoConexion {
     if (this.connected) return 'conectado';
@@ -276,7 +306,7 @@ export class RingHomePage implements OnInit {
     }
 
     // Suscripción al estado de conexión (se actualiza solo/desconecta cada ~30s)
-    this.ringBLEservice.connection_state$.subscribe((estado) => {
+    this.escuchar(this.ringBLEservice.connection_state$, (estado) => {
       console.log(
         '[CONEXIÓN]',
         estado ? 'CONECTADO' : 'DESCONECTADO',
@@ -287,7 +317,7 @@ export class RingHomePage implements OnInit {
       this.cdr.detectChanges();
     });
 
-    this.ringBLEservice.comandoConfirmado$.subscribe((data) => {
+    this.escuchar(this.ringBLEservice.comandoConfirmado$, (data) => {
       console.log(
         '[HOME] Comando',
         data.cmd,
@@ -298,22 +328,23 @@ export class RingHomePage implements OnInit {
     });
 
     // Suscripción a la información 1 del dispositivo (dirección BLE, versión...)
-    this.ringBLEservice.deviceInfo1$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.deviceInfo1$, (data: any) => {
       this.bleAddress = data.bleAddress;
       this.deviceVer = data.deviceVer;
       this.cdr.detectChanges();
     });
 
     // Suscripción a la información 2 del dispositivo (número de serie, vinculación...)
-    this.ringBLEservice.deviceInfo2$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.deviceInfo2$, (data: any) => {
       this.sn = data.sn;
       this.bindStatus = data.bindStatus;
-      this.samplingRate = data.samplingRate;
+      // samplingRate no se muestra: según el manual (2.5.28) solo es un
+      // parámetro de configuración del ECG, no una medición
       this.cdr.detectChanges();
     });
 
     // Suscripción a la información 5 del dispositivo (número de serie, vinculación...)
-    this.ringBLEservice.deviceInfo5$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.deviceInfo5$, (data: any) => {
       this.hrMeasurementTime = data.hrMeasurementTime;
       this.oxMeasurementInterval = data.oxMeasurementInterval;
       this.oxMeasurementSwitch =
@@ -322,7 +353,7 @@ export class RingHomePage implements OnInit {
     });
 
     // Suscripción a los datos de salud en vivo (pulso, oxígeno, HRV)
-    this.ringBLEservice.healthData$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.healthData$, (data: any) => {
       this.finalizarMedicion();
       this.pulso = data.heartValue;
       this.oxigeno = data.oxValue;
@@ -348,14 +379,14 @@ export class RingHomePage implements OnInit {
     });
 
     // El anillo no consiguió una lectura estable tras varios intentos
-    this.ringBLEservice.healthDataFallida$.subscribe(() => {
+    this.escuchar(this.ringBLEservice.healthDataFallida$, () => {
       this.finalizarMedicion(
         'No se obtuvo una lectura estable. Mantén el anillo quieto e inténtalo de nuevo.',
       );
     });
 
     // Suscripción al estado de la batería
-    this.ringBLEservice.batteryData$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.batteryData$, (data: any) => {
       this.bateria = data.batteryPer;
       this.estadobateria = data.status === 1 ? 'Cargando' : 'Desenchufado';
       this.cdr.detectChanges();
@@ -368,7 +399,7 @@ export class RingHomePage implements OnInit {
     });
 
     // Suscripción a la temperatura del dedo
-    this.ringBLEservice.temperatureData$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.temperatureData$, (data: any) => {
       this.finalizarMedicion();
       this.temperatura = data;
       this.cdr.detectChanges();
@@ -382,7 +413,7 @@ export class RingHomePage implements OnInit {
 
     // Suscripción al número total de registros históricos disponibles.
     // En cuanto llega, lanzamos automáticamente la descarga de esos históricos.
-    this.ringBLEservice.historicalNum$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.historicalNum$, (data: any) => {
       if (data.num && data.num > 0) {
         this.registerNum = data.num;
         this.startMeasuring('historicalData', this.registerNum);
@@ -393,7 +424,7 @@ export class RingHomePage implements OnInit {
       this.cdr.detectChanges();
     });
 
-    this.ringBLEservice.historicalData$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.historicalData$, (data: any) => {
       // El filtro de validez (dedo puesto, sin cargar, pulso razonable) y el
       // descarte de duplicados ya se hacen en el propio servicio (ring-bluetooth.ts)
       this.medicalHist.push(data);
@@ -427,7 +458,7 @@ export class RingHomePage implements OnInit {
     // terminado de verdad. Solo borramos los históricos del propio anillo si
     // estamos SEGUROS de que el guardado local salió bien -- borrar es
     // irreversible, así que nunca lo hacemos "a ciegas".
-    this.ringBLEservice.historicalDataCompleta$.subscribe(async () => {
+    this.escuchar(this.ringBLEservice.historicalDataCompleta$, async () => {
       const guardadoOk =
         await this.historialAnilloService.guardarMedicionesEnLote(
           this.bufferHistoricoParaGuardar,
@@ -448,7 +479,7 @@ export class RingHomePage implements OnInit {
 
     // La descarga se cortó (el anillo no se pudo reconectar): guardamos lo
     // recibido, pero NO se borra nada del anillo porque faltan registros
-    this.ringBLEservice.historicalDataAbortada$.subscribe(async () => {
+    this.escuchar(this.ringBLEservice.historicalDataAbortada$, async () => {
       await this.historialAnilloService.guardarMedicionesEnLote(
         this.bufferHistoricoParaGuardar,
       );
@@ -456,7 +487,7 @@ export class RingHomePage implements OnInit {
     });
 
     // Suscripción a los pasos del día (y cálculo de calorías asociado)
-    this.ringBLEservice.stepData$.subscribe((data: any) => {
+    this.escuchar(this.ringBLEservice.stepData$, (data: any) => {
       if (data && data.stepCount !== undefined) {
         this.steps = data.stepCount;
         this.calories = this.ringBLEservice.calculateCalories(
@@ -475,9 +506,12 @@ export class RingHomePage implements OnInit {
     });
 
     // Cada vez que se guarda algo redibujamos las gráficas automáticamente
-    this.historialAnilloService.datosActualizados$.subscribe(() => {
-      this.cargarGraficasDesdeAlmacenamiento();
-    });
+    // Si llegan varios guardados seguidos (p. ej. una descarga), se agrupan
+    // en una sola recarga de las gráficas
+    this.escuchar(
+      this.historialAnilloService.datosActualizados$.pipe(debounceTime(300)),
+      () => this.cargarGraficasDesdeAlmacenamiento(),
+    );
 
     // Cargamos las gráficas por primera vez, esté o no conectado el anillo
     this.cargarGraficasDesdeAlmacenamiento();
@@ -502,7 +536,7 @@ export class RingHomePage implements OnInit {
     const device = await this.ringBLEservice.scan();
 
     if (device) {
-      alert(`Escaneo con exito. Seleccionado: ${device.name}`);
+      this.avisar(`Anillo encontrado: ${device.name}`);
 
       const succesfulConnexion = await this.ringBLEservice.connect();
 
@@ -526,7 +560,7 @@ export class RingHomePage implements OnInit {
         await this.ringBLEservice.timesynchro();
         this.iniciarDescargaHistoricosAutomatica();
       } else {
-        alert('Se encontró anillo pero no se pudo conectar');
+        this.avisar('Se encontró anillo pero no se pudo conectar');
       }
     } else {
       console.log('No seleccionado ningun dispositivo');
@@ -588,11 +622,11 @@ export class RingHomePage implements OnInit {
     if (!savedID) return false;
 
     if (!this.connected) {
-      alert('Anillo dormido, intentando despertar');
+      this.avisar('Anillo dormido, intentando despertar');
       const ok = await this.ringBLEservice.connectSilently(savedID);
 
       if (!ok) {
-        alert('No se pudo conectar al anillo');
+        this.avisar('No se pudo conectar al anillo');
         return false;
       }
       await this.ringBLEservice.timesynchro();
@@ -756,7 +790,7 @@ export class RingHomePage implements OnInit {
    */
   async calculateRestingHeartRate() {
     if (this.medicalHist.length === 0) {
-      alert('Primero hay que descargar los históricos');
+      this.avisar('Primero hay que descargar los históricos');
       return;
     }
 
@@ -777,15 +811,15 @@ export class RingHomePage implements OnInit {
       this.restingHeartRate = Math.floor(ultimoRegistro.data);
       this.cdr.detectChanges();
 
-      // Guardamos cada día en el histórico local con su fecha real;
-      // la gráfica se redibuja sola al guardarse
-      resultado.forEach((diaReposo: any) => {
-        this.historialAnilloService.guardarMedicion(
-          'reposo',
-          { bpm: Math.floor(diaReposo.data) },
-          diaReposo.ts, // Timestamp del propio día, no el momento actual
-        );
-      });
+      // Guardamos todos los días de una vez (una sola escritura), cada uno con
+      // su fecha real; la gráfica se redibuja sola al guardarse
+      this.historialAnilloService.guardarMedicionesEnLote(
+        resultado.map((diaReposo: any) => ({
+          tipo: 'reposo' as const,
+          valores: { bpm: Math.floor(diaReposo.data) },
+          fecha: diaReposo.ts, // Timestamp del propio día, no el momento actual
+        })),
+      );
     } else {
       console.log('No hay datos suficientes de pulso en reposo.');
       this.restingHeartRate = '--';
@@ -799,31 +833,18 @@ export class RingHomePage implements OnInit {
    */
   async cargarGraficasDesdeAlmacenamiento() {
     const desde = calcularFechaDesde(this.rangoGraficasSeleccionado);
-    type TipoAnillo = Parameters<
-      HistorialAnilloService['obtenerHistorialPorTipoYFecha']
-    >[0];
-    const leer = (tipo: TipoAnillo) =>
-      this.historialAnilloService.obtenerHistorialPorTipoYFecha(tipo, desde);
 
-    const [
-      pulso,
-      hrv,
-      oxigeno,
-      temperatura,
-      pasos,
-      bateria,
-      movimiento,
-      reposo,
-    ] = await Promise.all([
-      leer('pulso'),
-      leer('hrv'),
-      leer('oxigeno'),
-      leer('temperatura'),
-      leer('pasos'),
-      leer('bateria'),
-      leer('movimiento'),
-      leer('reposo'),
-    ]);
+    // Una sola lectura del almacén para todas las gráficas
+    const {
+      pulso = [],
+      hrv = [],
+      oxigeno = [],
+      temperatura = [],
+      pasos = [],
+      bateria = [],
+      movimiento = [],
+      reposo = [],
+    } = await this.historialAnilloService.obtenerAgrupadoPorTipo(desde);
 
     // Las claves coinciden con las de "graficas"
     this.puntosGraficas = {
@@ -853,7 +874,7 @@ export class RingHomePage implements OnInit {
    */
   async toggleSportMode() {
     if (!this.connected) {
-      alert('El anillo no está conectado');
+      this.avisar('El anillo no está conectado');
       return;
     }
 

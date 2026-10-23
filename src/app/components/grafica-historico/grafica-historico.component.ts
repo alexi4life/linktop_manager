@@ -8,8 +8,33 @@ import {
   ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import Chart from 'chart.js/auto';
+import {
+  BarController,
+  BarElement,
+  CategoryScale,
+  Chart,
+  Filler,
+  LineController,
+  LineElement,
+  LinearScale,
+  PointElement,
+  Tooltip,
+} from 'chart.js';
 import { PuntoGrafica } from '../../constants/graficas';
+
+// Solo registramos lo que usan estas gráficas (línea, barras, relleno y
+// tooltip), en vez de 'chart.js/auto', que carga todos los tipos de gráfica
+Chart.register(
+  LineController,
+  LineElement,
+  PointElement,
+  BarController,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  Filler,
+  Tooltip,
+);
 
 /**
  * Tarjeta con la gráfica de una métrica guardada en el historial local.

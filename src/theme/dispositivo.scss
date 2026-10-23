@@ -1,0 +1,187 @@
+// ===== ESTILOS COMUNES A LAS PÁGINAS DE DISPOSITIVO =====
+// Compartidos por el Health Monitor (app-home) y el anillo (app-ring-home),
+// para que ambos se vean igual. Lo propio de cada uno sigue en su .scss.
+
+app-home,
+app-ring-home {
+  // ----- Variables de diseño, estilo Apple Health -----
+  --color-fondo: #f2f2f7; // Gris muy claro
+  --color-tarjeta: #ffffff;
+  --color-texto-principal: #1c1c1e;
+  --color-texto-secundario: #8e8e93;
+  --radio-tarjeta: 20px;
+  --sombra-tarjeta: 0 2px 10px rgba(0, 0, 0, 0.06);
+  font-family:
+    "Quicksand",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+
+  ion-content {
+    --background: var(--color-fondo);
+  }
+
+  // Cabecera siempre clara, sin importar el modo oscuro del sistema
+  ion-header ion-toolbar {
+    --background: #ffffff;
+    --color: #1c1c1e;
+    --border-color: #e5e5ea;
+  }
+
+  // ----- Cuadrícula de tarjetas de sensores -----
+  .cuadricula-sensores {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  // ----- Tarjeta individual de sensor -----
+  .tarjeta-sensor {
+    background: var(--color-tarjeta);
+    border-radius: var(--radio-tarjeta);
+    box-shadow: var(--sombra-tarjeta);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-height: 140px;
+
+    &.tarjeta-ancha {
+      grid-column: 1 / -1; // Ocupa las dos columnas
+    }
+
+    .cabecera-sensor {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 8px;
+
+      ion-icon {
+        font-size: 1.3rem;
+      }
+
+      .nombre-sensor {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--color-texto-secundario);
+      }
+    }
+
+    .valor-sensor {
+      width: 100%;
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--color-texto-principal);
+      line-height: 1.1;
+      margin-bottom: 8px;
+
+      &.valor-vacio {
+        color: var(--color-texto-secundario);
+        opacity: 0.4;
+      }
+
+      .unidad-sensor {
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--color-texto-secundario);
+        margin-left: 4px;
+      }
+    }
+
+    .subtitulo-sensor {
+      font-size: 0.75rem;
+      color: var(--color-texto-secundario);
+      margin-top: 2px;
+    }
+
+    .boton-medir {
+      width: 100%;
+      margin-top: auto;
+      padding-top: 12px;
+    }
+  }
+
+  // ----- Botón único estilo iOS, igual en todas las tarjetas -----
+  .boton-ios {
+    --background: #007aff; // Azul iOS estándar
+    --color: #ffffff;
+    --border-radius: 14px;
+    --box-shadow: none;
+    height: 44px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-transform: none;
+    margin: 0;
+
+    // Mientras mide, el mismo botón sirve para detener (en rojo iOS)
+    &.boton-detener {
+      --background: #ff3b30;
+    }
+  }
+
+  // ----- Botones de control del dispositivo (reiniciar, apagar...) -----
+  // Misma forma que .boton-ios; el color lo pone Ionic con color="danger"
+  .boton-control {
+    --border-radius: 14px;
+    --box-shadow: none;
+    height: 44px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-transform: none;
+    margin: 12px 0 0;
+  }
+
+  // ----- Colores de los iconos de cada sensor -----
+  // Los mismos que las gráficas (COLORES_METRICA en constants/graficas.ts),
+  // para que una métrica tenga el mismo color en todas partes
+  .color-temperatura {
+    color: #ff9500;
+  }
+  .color-oxigeno {
+    color: #32ade6;
+  }
+  .color-pulso {
+    color: #ff3b30;
+  }
+  .color-ecg {
+    color: #ff2d55; // Rosa "corazón", el mismo que la onda del ECG
+  }
+  .color-bateria {
+    color: #34c759;
+  }
+  .color-presion {
+    color: #5856d6;
+  }
+  .color-pasos {
+    color: #00c7be;
+  }
+  .color-sueno {
+    color: #5856d6;
+  }
+  .color-info {
+    color: #8e8e93;
+  }
+
+  // ----- Mensajes de aviso y error (amarillo por defecto) -----
+  .mensaje-alerta {
+    width: 100%;
+    border-radius: 16px;
+    margin-top: 12px;
+    padding: 12px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+    background: #fff3cd;
+    color: #856404;
+
+    &.alerta-error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  }
+}

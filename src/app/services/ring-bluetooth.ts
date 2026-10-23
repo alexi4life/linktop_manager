@@ -110,36 +110,10 @@ export class RingBluetooth {
     try {
       console.log(`Conectando a ${this.ring_device.deviceId}`);
 
-      await BleClient.connect(this.ring_device.deviceId, (deviceId) => {
-        console.warn(
-          `El dispositivo ${deviceId} se ha desconectado o puesto en modo reposo`,
-        );
-        this.ring_device = null;
-        this.connection_state$.next(false);
-        this.reconectarSiDescargandoHistoricos();
-      });
+      await BleClient.connect(this.ring_device.deviceId, this.alDesconectarse);
 
       this.connection_state$.next(true);
-      // Registramos el listener de confirmación de comandos una sola vez, nada más conectar
-
-      if (!this.rePackageListenerRegistrado) {
-        this.rePackageListenerRegistrado = true;
-        const rePackageListener = {
-          onResult: (data: any) => {
-            console.log(
-              '[CONFIRMACIÓN COMANDO]',
-              'cmd:',
-              data.cmd,
-              '| resultado:',
-              data.result,
-              '| razón:',
-              data.reason,
-            );
-            this.comandoConfirmado$.next(data);
-          },
-        };
-        SDK.default.registerRePackageListener(rePackageListener);
-      }
+      this.registrarConfirmacionComandos();
       this.ultimoDeviceId = this.ring_device.deviceId; // Guardamos el ID por si hace falta reconectar solos
       console.log('El dispositivo se ha conectado');
       return true;
@@ -147,6 +121,44 @@ export class RingBluetooth {
       console.error('Error al conectar: ', error);
       return false;
     }
+  }
+
+  /**
+   * Se ejecuta cuando el anillo se desconecta (normalmente porque entra en
+   * reposo para ahorrar batería). Si había una descarga de históricos a
+   * medias, intenta reconectar. Es una función flecha para poder pasarla
+   * directamente a BleClient.connect sin perder "this".
+   */
+  private alDesconectarse = (deviceId: string): void => {
+    console.warn(
+      `El dispositivo ${deviceId} se ha desconectado o puesto en modo reposo`,
+    );
+    this.ring_device = null;
+    this.connection_state$.next(false);
+    this.reconectarSiDescargandoHistoricos();
+  };
+
+  /**
+   * Registra, una sola vez por sesión, el listener que confirma si el anillo
+   * acepta o rechaza cada comando enviado.
+   */
+  private registrarConfirmacionComandos(): void {
+    if (this.rePackageListenerRegistrado) return;
+    this.rePackageListenerRegistrado = true;
+    SDK.default.registerRePackageListener({
+      onResult: (data: any) => {
+        console.log(
+          '[CONFIRMACIÓN COMANDO]',
+          'cmd:',
+          data.cmd,
+          '| resultado:',
+          data.result,
+          '| razón:',
+          data.reason,
+        );
+        this.comandoConfirmado$.next(data);
+      },
+    });
   }
 
   /**
@@ -183,14 +195,7 @@ export class RingBluetooth {
       try {
         // Intentamos conectar directo, como siempre -- esto es lo que ya
         // funcionaba bien cuando el anillo se dormía con la página aún abierta
-        await BleClient.connect(deviceId, (disconnectedId) => {
-          console.warn(
-            `El dispositivo ${disconnectedId} se ha desconectado por ahorro de energia`,
-          );
-          this.ring_device = null;
-          this.connection_state$.next(false);
-          this.reconectarSiDescargandoHistoricos();
-        });
+        await BleClient.connect(deviceId, this.alDesconectarse);
       } catch (errorConexionDirecta) {
         // Solo llegamos aquí si la conexión directa falló -- típicamente porque
         // se recargó la página y el navegador "olvidó" la referencia del dispositivo.
@@ -216,36 +221,12 @@ export class RingBluetooth {
 
         // Ahora que recuperamos la referencia (si el navegador lo soporta),
         // reintentamos la conexión de verdad
-        await BleClient.connect(deviceId, (disconnectedId) => {
-          console.warn(
-            `El dispositivo ${disconnectedId} se ha desconectado por ahorro de energia`,
-          );
-          this.ring_device = null;
-          this.connection_state$.next(false);
-          this.reconectarSiDescargandoHistoricos();
-        });
+        await BleClient.connect(deviceId, this.alDesconectarse);
       }
 
       this.ring_device = { deviceId: deviceId } as BleDevice;
       this.connection_state$.next(true);
-      if (!this.rePackageListenerRegistrado) {
-        this.rePackageListenerRegistrado = true;
-        const rePackageListener = {
-          onResult: (data: any) => {
-            console.log(
-              '[CONFIRMACIÓN COMANDO]',
-              'cmd:',
-              data.cmd,
-              '| resultado:',
-              data.result,
-              '| razón:',
-              data.reason,
-            );
-            this.comandoConfirmado$.next(data);
-          },
-        };
-        SDK.default.registerRePackageListener(rePackageListener);
-      }
+      this.registrarConfirmacionComandos();
       this.ultimoDeviceId = deviceId;
       return true;
     } catch (error) {
@@ -320,8 +301,6 @@ export class RingBluetooth {
    */
   async sendData(cmd: string, data: any = null): Promise<void> {
     if (!this.ring_device) return;
-
-    const isCmdClose = cmd.includes('close'); // FIXME - variable calculada pero nunca usada
 
     try {
       const payload = data ? data : {};
