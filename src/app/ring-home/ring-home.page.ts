@@ -8,7 +8,6 @@ import {
   IonTitle,
   IonToolbar,
   IonButton,
-  IonSpinner,
   IonIcon,
   IonToggle,
   IonSelect,
@@ -18,6 +17,7 @@ import { RingBluetooth } from '../services/ring-bluetooth';
 import { timemgt } from '../constants/aux-funct';
 import { GraficaHistoricoComponent } from '../components/grafica-historico/grafica-historico.component';
 import { SegmentoIosComponent } from '../components/segmento-ios/segmento-ios.component';
+import { IndicadorMedicionComponent } from '../components/indicador-medicion/indicador-medicion.component';
 import {
   EstadoConexion,
   EstadoConexionComponent,
@@ -61,7 +61,6 @@ const TIEMPO_MAXIMO_MEDICION_MS = 60_000;
     IonTitle,
     IonToolbar,
     IonButton,
-    IonSpinner,
     IonIcon,
     IonSelect,
     IonToggle,
@@ -71,6 +70,7 @@ const TIEMPO_MAXIMO_MEDICION_MS = 60_000;
     GraficaHistoricoComponent,
     SegmentoIosComponent,
     EstadoConexionComponent,
+    IndicadorMedicionComponent,
   ],
 })
 export class RingHomePage implements OnInit {

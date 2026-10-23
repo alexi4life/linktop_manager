@@ -5,7 +5,6 @@ import {
   IonTitle,
   IonContent,
   IonButton,
-  IonSpinner,
   IonIcon,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
@@ -23,6 +22,7 @@ import { CommonModule } from '@angular/common';
 import { HistorialService } from '../services/HM-historial.service';
 import { GraficaHistoricoComponent } from '../components/grafica-historico/grafica-historico.component';
 import { SegmentoIosComponent } from '../components/segmento-ios/segmento-ios.component';
+import { IndicadorMedicionComponent } from '../components/indicador-medicion/indicador-medicion.component';
 import {
   EstadoConexion,
   EstadoConexionComponent,
@@ -48,12 +48,12 @@ import {
     IonTitle,
     IonContent,
     IonButton,
-    IonSpinner,
     IonIcon,
     CommonModule,
     GraficaHistoricoComponent,
     SegmentoIosComponent,
     EstadoConexionComponent,
+    IndicadorMedicionComponent,
   ],
 })
 export class HomePage implements OnInit {
@@ -236,8 +236,8 @@ export class HomePage implements OnInit {
   }
 
   /**
-   * Mide oxígeno en sangre (SpO2) y pulso. Si el usuario levanta el dedo, la
-   * medición se interrumpe; al terminar, guarda el último valor recibido.
+   * Mide oxígeno en sangre (SpO2) y pulso. Si no hay dedo, avisa y sigue
+   * esperando; al terminar, guarda el último valor recibido con el dedo puesto.
    */
   medirOX() {
     this.medicionActiva = 'OX';
@@ -245,7 +245,7 @@ export class HomePage implements OnInit {
     this.midiendoBT = false;
     this.spo2 = null;
     this.pulso = null;
-    this.dedoPuesto = true;
+    this.dedoPuesto = false; // Hasta que el sensor detecte el dedo
     this.errorOxigeno = null;
 
     let spo2Temp: number | null = null;
@@ -255,20 +255,23 @@ export class HomePage implements OnInit {
       (resultadoSpO2, resultadoPulso) => {
         spo2Temp = resultadoSpO2;
         pulsoTemp = resultadoPulso;
+        // Si llegan lecturas es que hay dedo, aunque el SDK no lo haya avisado
+        if (!this.dedoPuesto) {
+          this.dedoPuesto = true;
+          this.cdr.detectChanges();
+        }
       },
-      (estaTocando) => {
-        this.dedoPuesto = estaTocando;
-        if (!estaTocando) {
-          this.midiendoOX = false;
+      // Sin dedo: solo avisamos; la medición sigue hasta que lo apoye
+      (tocando) => {
+        this.dedoPuesto = tocando;
+        if (!tocando) {
+          // Las lecturas sin dedo no valen: esperamos a las siguientes
           spo2Temp = null;
           pulsoTemp = null;
-          this.spo2 = null;
-          this.pulso = null;
-          this.errorOxigeno =
-            'Medición interrumpida. Vuelva a intentarlo manteniendo el dedo apoyado.';
         }
         this.cdr.detectChanges();
       },
+      // Fin correcto tras el tiempo mínimo: mostramos y guardamos
       () => {
         this.midiendoOX = false;
         this.spo2 = spo2Temp;
@@ -281,6 +284,13 @@ export class HomePage implements OnInit {
             pulso: pulsoTemp,
           });
         }
+      },
+      // El monitor terminó antes de tiempo: no hay resultado válido
+      () => {
+        this.midiendoOX = false;
+        this.errorOxigeno =
+          'Medición interrumpida. Vuelva a intentarlo manteniendo el dedo apoyado.';
+        this.cdr.detectChanges();
       },
     );
   }
@@ -362,7 +372,7 @@ export class HomePage implements OnInit {
     this.ecgAnimacionActiva = true;
     this.ecgHR = null;
     this.ecgHRV = null;
-    this.dedoPuestoECG = true;
+    this.dedoPuestoECG = false; // Hasta que el sensor detecte los dedos
 
     this.bucleECG();
 

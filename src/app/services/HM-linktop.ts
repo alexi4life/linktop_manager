@@ -41,7 +41,7 @@ export class LinktopService {
   private oxigenoActivo: boolean = false; // Si hay una medición de oxígeno en curso ahora mismo
   private oxigenoTiempoInicio: number = 0;
   private oxigenoOnEnd: (() => void) | null = null;
-  private oxigenoOnFingerChange: ((atendido: boolean) => void) | null = null;
+  private oxigenoOnInterrumpida: (() => void) | null = null;
 
   constructor() {
     this.SDK = (window as any).default;
@@ -108,11 +108,13 @@ export class LinktopService {
               const segundosTranscurridos =
                 (Date.now() - this.oxigenoTiempoInicio) / 1000;
 
+              console.log(
+                `[OX] Fin por onModeChange(null) a los ${segundosTranscurridos.toFixed(1)} s`,
+              );
               if (segundosTranscurridos >= 30) {
                 if (this.oxigenoOnEnd) this.oxigenoOnEnd();
               } else {
-                if (this.oxigenoOnFingerChange)
-                  this.oxigenoOnFingerChange(false);
+                if (this.oxigenoOnInterrumpida) this.oxigenoOnInterrumpida();
               }
             }
           },
@@ -209,14 +211,22 @@ export class LinktopService {
    * Configura el ciclo de vida del oxímetro, controlando la detección del dedo en el hardware,
    * los tiempos mínimos de estabilización (30 segundos) y la recolección de los datos finales.
    *
+   * Distingue dos avisos que antes compartían callback:
+   * - `onDedo`: el sensor detecta o pierde el dedo. La medición SIGUE en curso
+   *   (el SDK puede avisar de "sin dedo" nada más empezar, antes de apoyarlo).
+   * - `onInterrumpida`: el monitor ha terminado antes de los 30 s mínimos,
+   *   así que no hay resultado válido.
+   *
    * @param callback - Función que recibe los valores finales validados: (spo2, hr).
-   * @param onFingerChange - (Opcional) Callback que notifica si el dedo entra en contacto con el sensor.
-   * @param onEnd - (Opcional) Callback que se ejecuta cuando la medición finaliza con éxito tras cumplir el tiempo.
+   * @param onDedo - (Opcional) Notifica si el dedo está o no sobre el sensor.
+   * @param onEnd - (Opcional) La medición finaliza con éxito tras cumplir el tiempo.
+   * @param onInterrumpida - (Opcional) La medición terminó antes de tiempo.
    */
   medicionOxigeno(
     callback: (spo2: number, hr: number) => void,
-    onFingerChange?: (atendido: boolean) => void,
+    onDedo?: (tocando: boolean) => void,
     onEnd?: () => void,
+    onInterrumpida?: () => void,
   ) {
     let tiempoInicio = Date.now();
     this.cancelado = false;
@@ -227,7 +237,7 @@ export class LinktopService {
     this.oxigenoActivo = true;
     this.oxigenoTiempoInicio = tiempoInicio;
     this.oxigenoOnEnd = onEnd ?? null;
-    this.oxigenoOnFingerChange = onFingerChange ?? null;
+    this.oxigenoOnInterrumpida = onInterrumpida ?? null;
 
     if (this.SDK && this.SDK.registerOXListener) {
       this.SDK.registerOXListener({
@@ -255,12 +265,14 @@ export class LinktopService {
             this.medicionOXFinalizando = true;
             this.oxigenoActivo = false;
 
+            console.log(
+              `[OX] Fin por onProcess(5) a los ${segundosTranscurridos.toFixed(1)} s`,
+            );
+            this.SDK.unRegisterOXListener();
             if (segundosTranscurridos >= 30) {
-              this.SDK.unRegisterOXListener();
               if (onEnd) onEnd();
             } else {
-              this.SDK.unRegisterOXListener();
-              if (onFingerChange) onFingerChange(false);
+              if (onInterrumpida) onInterrumpida();
             }
           }
         },
@@ -271,9 +283,8 @@ export class LinktopService {
         onFinger: (isTouch: boolean) => {
           // Igual que en ECG: si ya cerramos, no reaccionamos a más avisos
           if (this.medicionOXFinalizando) return;
-          if (onFingerChange) {
-            onFingerChange(isTouch);
-          }
+          console.log('[OX] Dedo sobre el sensor:', isTouch);
+          if (onDedo) onDedo(isTouch);
         },
         onResult: (spo2: any, hr: any) => {
           callback(Number(spo2), Number(hr));

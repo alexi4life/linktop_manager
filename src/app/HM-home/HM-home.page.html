@@ -50,9 +50,9 @@
           class="valor-sensor"
           [class.valor-vacio]="temperatura === null && !midiendoBT"
         >
-          <span *ngIf="midiendoBT; else valorBT" class="indicador-midiendo">
-            <ion-spinner name="crescent"></ion-spinner>Midiendo…
-          </span>
+          <app-indicador-medicion
+            *ngIf="midiendoBT; else valorBT"
+          ></app-indicador-medicion>
           <ng-template #valorBT>
             <ng-container *ngIf="temperatura !== null; else vacioBT">
               {{ temperatura }}<span class="unidad-sensor">°C</span>
@@ -114,9 +114,10 @@
           class="valor-sensor"
           [class.valor-vacio]="spo2 === null && !midiendoOX"
         >
-          <span *ngIf="midiendoOX; else valorOX" class="indicador-midiendo">
-            <ion-spinner name="crescent"></ion-spinner>Midiendo…
-          </span>
+          <app-indicador-medicion
+            *ngIf="midiendoOX; else valorOX"
+            [sinDedo]="!dedoPuesto"
+          ></app-indicador-medicion>
           <ng-template #valorOX>
             <ng-container
               *ngIf="spo2 !== null && pulso !== null; else vacioOX"
@@ -130,12 +131,6 @@
           <ng-template #vacioOX>—</ng-template>
         </div>
 
-        <p
-          class="mensaje-alerta alerta-advertencia"
-          *ngIf="midiendoOX && !dedoPuesto"
-        >
-          🚨 Coloca el dedo de nuevo sobre el sensor
-        </p>
         <p class="subtitulo-sensor" *ngIf="midiendoOX && dedoPuesto">
           Mantén el dedo presionado sobre el sensor...
         </p>
@@ -171,9 +166,9 @@
           class="valor-sensor"
           [class.valor-vacio]="presionSistolica === null && !midiendoBP"
         >
-          <span *ngIf="midiendoBP; else valorBP" class="indicador-midiendo">
-            <ion-spinner name="crescent"></ion-spinner>Midiendo…
-          </span>
+          <app-indicador-medicion
+            *ngIf="midiendoBP; else valorBP"
+          ></app-indicador-medicion>
           <ng-template #valorBP>
             <ng-container
               *ngIf="presionSistolica !== null && presionDiastolica !== null; else vacioBP"
@@ -222,9 +217,11 @@
           class="valor-sensor"
           [class.valor-vacio]="ecgHR === null && !midiendoECG"
         >
-          <span *ngIf="midiendoECG; else valorECG" class="indicador-midiendo">
-            <ion-spinner name="crescent"></ion-spinner>Midiendo…
-          </span>
+          <app-indicador-medicion
+            *ngIf="midiendoECG; else valorECG"
+            [sinDedo]="!dedoPuestoECG"
+            textoSinDedo="Coloca los dedos en los electrodos"
+          ></app-indicador-medicion>
           <ng-template #valorECG>
             <ng-container *ngIf="ecgHR !== null; else vacioECG">
               {{ ecgHR | number:'1.0-0' }}<span class="unidad-sensor">ppm</span>
@@ -239,12 +236,6 @@
 
         <p class="subtitulo-sensor" *ngIf="midiendoECG && dedoPuestoECG">
           Mantén ambos dedos sobre el electrodo...
-        </p>
-        <p
-          class="mensaje-alerta alerta-advertencia"
-          *ngIf="midiendoECG && !dedoPuestoECG"
-        >
-          🚨 Coloca los dedos de nuevo sobre el electrodo
         </p>
 
         <!-- Canvas del ECG — visible durante y después de la medición -->

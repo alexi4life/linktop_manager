@@ -50,22 +50,6 @@
   margin-bottom: 16px;
 }
 
-// Indicador que sustituye al valor de una tarjeta mientras se mide
-.indicador-midiendo {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #007aff;
-
-  ion-spinner {
-    width: 22px;
-    height: 22px;
-    color: #007aff;
-  }
-}
-
 // El popover del selector de oxígeno se inserta fuera del componente (Ionic lo
 // añade al final del <body>), así que su estilo no puede ir en ring-home.page.scss
 // -- tiene que estar aquí, en el CSS global, para que le llegue de verdad.

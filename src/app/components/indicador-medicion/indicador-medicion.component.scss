@@ -1,0 +1,24 @@
+// Azul iOS mientras mide; naranja iOS mientras espera el dedo
+.indicador {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #007aff;
+
+  ion-spinner,
+  ion-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  ion-spinner {
+    color: #007aff;
+  }
+
+  &.sin-dedo {
+    color: #ff9500;
+  }
+}

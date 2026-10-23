@@ -62,9 +62,9 @@
           class="valor-sensor"
           [class.valor-vacio]="(pulso === '---' || pulso === '--') && midiendo !== 'pulso'"
         >
-          <span *ngIf="midiendo === 'pulso'; else valorPulso" class="indicador-midiendo">
-            <ion-spinner name="crescent"></ion-spinner>Midiendo…
-          </span>
+          <app-indicador-medicion
+            *ngIf="midiendo === 'pulso'; else valorPulso"
+          ></app-indicador-medicion>
           <ng-template #valorPulso>
             {{ pulso }}<span class="unidad-sensor">bpm</span>
           </ng-template>
@@ -90,9 +90,9 @@
           class="valor-sensor"
           [class.valor-vacio]="oxigeno === '--' && midiendo !== 'oxigeno'"
         >
-          <span *ngIf="midiendo === 'oxigeno'; else valorOxigeno" class="indicador-midiendo">
-            <ion-spinner name="crescent"></ion-spinner>Midiendo…
-          </span>
+          <app-indicador-medicion
+            *ngIf="midiendo === 'oxigeno'; else valorOxigeno"
+          ></app-indicador-medicion>
           <ng-template #valorOxigeno>
             {{ oxigeno }}<span class="unidad-sensor">%</span>
           </ng-template>
@@ -121,9 +121,9 @@
           class="valor-sensor"
           [class.valor-vacio]="temperatura === '--' && midiendo !== 'temperatura'"
         >
-          <span *ngIf="midiendo === 'temperatura'; else valorTemperatura" class="indicador-midiendo">
-            <ion-spinner name="crescent"></ion-spinner>Midiendo…
-          </span>
+          <app-indicador-medicion
+            *ngIf="midiendo === 'temperatura'; else valorTemperatura"
+          ></app-indicador-medicion>
           <ng-template #valorTemperatura>
             {{ temperatura }}<span class="unidad-sensor">°C</span>
           </ng-template>
