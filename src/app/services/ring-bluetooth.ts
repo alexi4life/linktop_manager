@@ -31,7 +31,8 @@ const MAX_RECONEXIONES_HISTORICOS = 3;
 //   8) 2.5.29 - Filtrado de datos históricos (ObtainValidHistoricalData) — sustituido por
 //      nuestro propio filtro de validez (isWorn/notCharging/validHeartRate), ver activateMeasurements
 //   9) 2.5.30-2.5.31 - Fluctuación de temperatura y estrés (el manual dice que son solo demo)
-//   10) 2.5.32 - Umbral de conteo de pasos
+//   10) 2.5.32 - Umbral de conteo de pasos — el comando 'stepThreshold' no existe en el
+//      ringSDK.js del proyecto (comprobado ejecutándolo en Node); requeriría otra versión del SDK
 
 @Injectable({
   providedIn: 'root',

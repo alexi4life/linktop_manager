@@ -22,6 +22,7 @@ import {
   thermometerOutline,
   waterOutline,
   pulseOutline,
+  informationCircleOutline,
   batteryHalfOutline,
   heartOutline,
   checkmarkCircle,
@@ -90,6 +91,10 @@ export class HomePage implements OnInit {
   spo2: number | null = null;
   pulso: number | null = null;
   dedoPuesto: boolean = true;
+  /** Versiones del monitor (servicio 0x180a); null hasta conectar. */
+  versiones: { firmware: string; hardware: string; software: string } | null =
+    null;
+
   errorOxigeno: string | null = null;
 
   // VARIABLES BATERÍA
@@ -203,6 +208,7 @@ export class HomePage implements OnInit {
       batteryHalfOutline,
       waterOutline,
       pulseOutline,
+      informationCircleOutline,
       heartOutline,
       checkmarkCircle,
       warningOutline,
@@ -236,6 +242,7 @@ export class HomePage implements OnInit {
     // Si el usuario cancela el escaneo, volvemos a "sin conectar"
     this.estadoConexion = this.conectado ? 'conectado' : 'sin-conectar';
     this.nombreDispositivo = this.LTS.nombreDispositivo;
+    if (this.conectado) this.versiones = await this.LTS.leerVersiones();
   }
 
   /** Indica si hay alguna medición en curso, para bloquear el resto de botones. */
