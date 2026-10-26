@@ -26,8 +26,8 @@ interface RegistroMedicionAnillo {
 }
 
 // Clave única bajo la que se guarda todo el historial del anillo
-// Separada de la clave que usa el HistorialService de Linktop para que descargar
-// miles de registros del anillo no obligue a releer/reescribir los datos de Linktop.
+// Separada de la clave que usa el HistorialService del Health Monitor para que descargar
+// miles de registros del anillo no obligue a releer/reescribir los datos del Health Monitor.
 const CLAVE_ALMACEN = 'historial_anillo';
 
 @Injectable({

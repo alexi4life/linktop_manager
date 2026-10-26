@@ -1,6 +1,6 @@
 /**
  * Tipos, colores y utilidades comunes a las gráficas de históricos de todos
- * los dispositivos (monitor Linktop y anillo NexRing), para que se vean igual.
+ * los dispositivos (Health Monitor y anillo NexRing), para que se vean igual.
  */
 
 /** Rangos de fechas disponibles en el selector de las gráficas. */

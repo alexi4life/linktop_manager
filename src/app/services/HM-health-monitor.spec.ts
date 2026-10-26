@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 
-import { Linktop } from './HM-linktop';
+import { HealthMonitorService } from './HM-health-monitor';
 
-describe('Linktop', () => {
-  let service: Linktop;
+describe('HealthMonitorService', () => {
+  let service: HealthMonitorService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(Linktop);
+    service = TestBed.inject(HealthMonitorService);
   });
 
   it('should be created', () => {

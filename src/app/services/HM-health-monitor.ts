@@ -5,7 +5,7 @@ import { ExceptionCode } from '@capacitor/core';
 declare var Engine: any;
 
 // Parametros de conexión del bluetooth (health monitor)
-const LINKTOP_UUIDS = {
+const HM_UUIDS = {
   SERVICE_HEALTH_DETECT: '0000ff27-0000-1000-8000-00805f9b34fb',
   CHARACTERISTIC_HEART_RATE_WRITE: '0000fff1-0000-1000-8000-00805f9b34fb',
   CHARACTERISTIC_HEART_RATE_MEASUREMENT: '0000fff4-0000-1000-8000-00805f9b34fb',
@@ -29,7 +29,7 @@ const Detection = {
 @Injectable({
   providedIn: 'root',
 })
-export class LinktopService {
+export class HealthMonitorService {
   // Variables
   private dispositivoConectado: any = null;
   private SDK: any = null;
@@ -81,7 +81,7 @@ export class LinktopService {
     try {
       // 1. Escaneo y selección del dispositivo mediante filtro por UUID de servicio
       const device = await BleClient.requestDevice({
-        services: [LINKTOP_UUIDS.SERVICE_HEALTH_DETECT],
+        services: [HM_UUIDS.SERVICE_HEALTH_DETECT],
       });
       this.dispositivoConectado = device;
 
@@ -134,8 +134,8 @@ export class LinktopService {
               try {
                 await BleClient.write(
                   this.dispositivoConectado.deviceId,
-                  LINKTOP_UUIDS.SERVICE_HEALTH_DETECT,
-                  LINKTOP_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE, // Característica fff1
+                  HM_UUIDS.SERVICE_HEALTH_DETECT,
+                  HM_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE, // Característica fff1
                   new DataView(new Uint8Array(data).buffer),
                 );
               } catch (error) {
@@ -153,8 +153,8 @@ export class LinktopService {
       // Redirige los bytes puros (raw data) recibidos directamente hacia el algoritmo del SDK
       await BleClient.startNotifications(
         device.deviceId,
-        LINKTOP_UUIDS.SERVICE_HEALTH_DETECT,
-        LINKTOP_UUIDS.CHARACTERISTIC_HEART_RATE_MEASUREMENT,
+        HM_UUIDS.SERVICE_HEALTH_DETECT,
+        HM_UUIDS.CHARACTERISTIC_HEART_RATE_MEASUREMENT,
         (value: DataView) => {
           if (this.SDK && this.SDK.pushRawData) {
             this.SDK.pushRawData(value.buffer);
@@ -375,8 +375,8 @@ export class LinktopService {
           ]);
           await BleClient.write(
             this.dispositivoConectado.deviceId,
-            LINKTOP_UUIDS.SERVICE_HEALTH_DETECT,
-            LINKTOP_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE,
+            HM_UUIDS.SERVICE_HEALTH_DETECT,
+            HM_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE,
             new DataView(comandoParada.buffer),
           );
         } catch (error) {
@@ -455,16 +455,6 @@ export class LinktopService {
       console.log('Error: SDK o registerBPListener no están definidos');
     }
   }
-
-  // FIXME - Se intentó integrar NeuroSky (algoritmo linktop) para calcular HR, HRV, ánimo y
-  // frecuencia respiratoria a partir de la onda del ECG, siguiendo el ejemplo del manual
-  // y reconstruyendo nosotros mismos el parseo de bytes BLE crudos.
-  // Resultado: el HR de NeuroSky fue inconsistente en pruebas repetidas. Se descarta NeuroSky
-  // por falta de fiabilidad demostrada.
-
-  // TODO - Si se consigue documentación oficial del fabricante sobre la frecuencia de
-  // muestreo real del ADC y el formato exacto de "processBluetoothEcgData", reintentar
-  // NeuroSky para poder ofrecer ánimo y frecuencia respiratoria (no calculados por el SDK nativo).
 
   /**
    * Inicia la medición de ECG (electrocardiograma).
