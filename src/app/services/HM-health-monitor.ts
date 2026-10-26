@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { AvisosService } from './avisos.service';
 import { BleClient } from '@capacitor-community/bluetooth-le';
 import { ExceptionCode } from '@capacitor/core';
 
@@ -30,6 +31,7 @@ const Detection = {
   providedIn: 'root',
 })
 export class HealthMonitorService {
+  private avisos = inject(AvisosService);
   // Variables
   private dispositivoConectado: any = null;
   private SDK: any = null;
@@ -123,6 +125,7 @@ export class HealthMonitorService {
           },
           onException: (error: any) => {
             console.log('[SDK] Excepción global:', error);
+            this.avisos.error('Error del Health Monitor');
           },
           /**
            * Intercepta los bytes generados por el algoritmo del SDK
@@ -140,6 +143,7 @@ export class HealthMonitorService {
                 );
               } catch (error) {
                 console.error('Error al transmitir comando del SDK:', error);
+                this.avisos.error('Error al enviar un comando al Health Monitor');
               }
             }
           },
@@ -194,6 +198,7 @@ export class HealthMonitorService {
         },
         onException: (error: any) => {
           console.log('ERROR DE EXCEPCION EN SDK: ', error);
+          this.avisos.error('Error del Health Monitor');
         },
         onResult: (temp: any) => {
           // Cuando el algoritmo del SDK termina con éxito, despacha el valor final al callback
@@ -284,6 +289,7 @@ export class HealthMonitorService {
         },
         onException: (error: any) => {
           console.log('[SDK-OX] Excepción en oxímetro:', error);
+          this.avisos.error('Error del oxímetro del Health Monitor');
         },
         onRawResult: (red: any, ir: any) => {},
         onFinger: (isTouch: boolean) => {
@@ -332,6 +338,7 @@ export class HealthMonitorService {
         onProcess: (process: any) => {},
         onException: (error: any) => {
           console.log('[BATTERY] Error:', error);
+          this.avisos.error('Error al leer la batería del Health Monitor');
         },
         onPowerResult: (data: any) => {
           // El SDK devuelve el porcentaje de energía remanente (escala 0 - 100)
@@ -381,6 +388,7 @@ export class HealthMonitorService {
           );
         } catch (error) {
           console.error('[SDK] Error al enviar comando de parada:', error);
+          this.avisos.error('Error al detener la medición del Health Monitor');
         }
       }
     }

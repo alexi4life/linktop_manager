@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { AvisosService } from './avisos.service';
 import {
   BleClient,
   BleDevice,
@@ -36,6 +37,7 @@ const MAX_RECONEXIONES_HISTORICOS = 3;
   providedIn: 'root',
 })
 export class RingBluetooth {
+  private avisos = inject(AvisosService);
   /* VARIABLES DE ESTADO */
   private ring_device: BleDevice | null = null;
 
@@ -91,6 +93,7 @@ export class RingBluetooth {
       return this.ring_device;
     } catch (error) {
       console.error('El escaneo falló o fue cancelado:', error);
+      this.avisos.error('No se pudo buscar el anillo');
       return null;
     }
   }
@@ -119,6 +122,7 @@ export class RingBluetooth {
       return true;
     } catch (error) {
       console.error('Error al conectar: ', error);
+      this.avisos.error('No se pudo conectar con el anillo');
       return false;
     }
   }
@@ -175,6 +179,7 @@ export class RingBluetooth {
         return false; // FIXME - debería ser "true" si la desconexión fue exitosa
       } catch (error) {
         console.error('Error al desconectar: ', error);
+        this.avisos.error('No se pudo desconectar el anillo');
       }
     }
     return false;
@@ -231,6 +236,7 @@ export class RingBluetooth {
       return true;
     } catch (error) {
       console.error('[RECONEXIÓN] ERROR AL RECONECTAR:', error);
+      this.avisos.error('No se pudo reconectar con el anillo');
       console.error('Error: ', error);
       return false;
     }
@@ -318,6 +324,7 @@ export class RingBluetooth {
       console.log(`Comando '${cmd}' enviado con éxito al anillo.`);
     } catch (error) {
       console.error(`Error al enviar comando ${error}`);
+      this.avisos.error('Error al enviar un comando al anillo');
     }
   }
 
@@ -342,6 +349,7 @@ export class RingBluetooth {
       );
     } catch (error) {
       console.error(`Error al recibir datos ${error}`);
+      this.avisos.error('Error al recibir datos del anillo');
     }
   }
 
