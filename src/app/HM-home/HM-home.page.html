@@ -157,6 +157,15 @@
           <ng-template #vacioOX>—</ng-template>
         </div>
 
+        <!-- Onda del pulso en un círculo (ojo de buey) mientras mide -->
+        <div style="width: 100%" [hidden]="!midiendoOX">
+          <app-onda-senal
+            #ondaOX
+            [circular]="true"
+            color="#32ade6"
+          ></app-onda-senal>
+        </div>
+
         <p class="subtitulo-sensor" *ngIf="midiendoOX && dedoPuesto">
           Mantén el dedo presionado sobre el sensor...
         </p>

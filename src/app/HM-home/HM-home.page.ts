@@ -28,6 +28,7 @@ import {
   checkmarkCircle,
   warningOutline,
 } from 'ionicons/icons';
+import { OndaSenalComponent } from '../components/onda-senal/onda-senal.component';
 import { HealthMonitorService } from '../services/HM-health-monitor';
 import { CommonModule } from '@angular/common';
 import { HistorialService } from '../services/HM-historial.service';
@@ -66,6 +67,7 @@ import {
     SegmentoIosComponent,
     EstadoConexionComponent,
     IndicadorMedicionComponent,
+    OndaSenalComponent,
     NumeroPipe,
   ],
 })
@@ -95,6 +97,7 @@ export class HomePage implements OnInit {
   versiones: { firmware: string; hardware: string; software: string } | null =
     null;
 
+  @ViewChild('ondaOX') ondaOX?: OndaSenalComponent; // Onda del pulso mientras mide oxígeno
   errorOxigeno: string | null = null;
 
   // VARIABLES BATERÍA
@@ -279,6 +282,7 @@ export class HomePage implements OnInit {
     this.pulso = null;
     this.dedoPuesto = false; // Hasta que el sensor detecte el dedo
     this.errorOxigeno = null;
+    this.ondaOX?.limpiar();
 
     let spo2Temp: number | null = null;
     let pulsoTemp: number | null = null;
@@ -324,6 +328,7 @@ export class HomePage implements OnInit {
           'Medición interrumpida. Vuelva a intentarlo manteniendo el dedo apoyado.';
         this.cdr.detectChanges();
       },
+      (valores) => this.ondaOX?.agregar(valores),
     );
   }
 

@@ -261,12 +261,14 @@ export class HealthMonitorService {
    * @param onDedo - (Opcional) Notifica si el dedo está o no sobre el sensor.
    * @param onEnd - (Opcional) La medición finaliza con éxito tras cumplir el tiempo.
    * @param onInterrumpida - (Opcional) La medición terminó antes de tiempo.
+   * @param onOnda - (Opcional) Recibe la señal infrarroja (PPG) en tiempo real para dibujar la onda.
    */
   medicionOxigeno(
     callback: (spo2: number, hr: number) => void,
     onDedo?: (tocando: boolean) => void,
     onEnd?: () => void,
     onInterrumpida?: () => void,
+    onOnda?: (valores: number[]) => void,
   ) {
     let tiempoInicio = Date.now();
     this.cancelado = false;
@@ -323,7 +325,12 @@ export class HealthMonitorService {
           console.log('[SDK-OX] Excepción en oxímetro:', error);
           this.avisos.error('Error del oxímetro del Health Monitor');
         },
-        onRawResult: (red: any, ir: any) => {},
+        // TODO - Pendiente de comprobar en el dispositivo que `ir` es la onda del pulso
+        onRawResult: (red: any, ir: any) => {
+          if (this.medicionOXFinalizando || !onOnda) return;
+          const valores = (Array.isArray(ir) ? ir : [ir]).map(Number);
+          onOnda(valores.filter((v) => Number.isFinite(v)));
+        },
         onFinger: (isTouch: boolean) => {
           // Igual que en ECG: si ya cerramos, no reaccionamos a más avisos
           if (this.medicionOXFinalizando) return;
