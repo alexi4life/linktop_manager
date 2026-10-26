@@ -100,6 +100,14 @@
             {{ oxigeno | numero }}<span class="unidad-sensor">%</span>
           </ng-template>
         </div>
+        <!-- Onda del pulso en un círculo (ojo de buey) mientras mide -->
+        <div style="width: 100%" [hidden]="midiendo !== 'oxigeno'">
+          <app-onda-senal
+            #ondaOX
+            [circular]="true"
+            color="#32ade6"
+          ></app-onda-senal>
+        </div>
         <div class="boton-medir">
           <ion-button
             expand="block"

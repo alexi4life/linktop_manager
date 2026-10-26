@@ -118,6 +118,7 @@ export class RingHomePage implements OnInit {
 
   // ELECTROCARDIOGRAMA (calculado por el anillo)
   @ViewChild('ondaECG') ondaECG?: OndaSenalComponent;
+  @ViewChild('ondaOX') ondaOX?: OndaSenalComponent; // Onda del pulso (PPG) mientras mide oxígeno
   ecgBpm: number | string = '--';
   ecgRmssd: number | string = '--';
   dedoEcg = false; // true mientras el dedo toca el electrodo
@@ -434,6 +435,11 @@ export class RingHomePage implements OnInit {
       );
     });
 
+    // Onda del pulso mientras se mide el oxígeno
+    this.escuchar(this.ringBLEservice.ppgOnda$, (puntos) =>
+      this.ondaOX?.agregar(puntos),
+    );
+
     // ECG: onda en vivo, dedo sobre el electrodo y resultados del anillo
     this.escuchar(this.ringBLEservice.ecgOnda$, (puntos) =>
       this.ondaECG?.agregar(puntos),
@@ -737,6 +743,7 @@ export class RingHomePage implements OnInit {
   /** Solicita medición de oxígeno (y pulso) al anillo. */
   async measuringOX() {
     this.modoMedicionActual = 'oxigeno';
+    this.ondaOX?.limpiar();
     await this.iniciarMedicion('oxigeno', 'openHealth');
   }
 
