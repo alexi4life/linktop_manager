@@ -138,6 +138,11 @@ export class RingHomePage implements OnInit {
   // VARIABLES DE PULSO EN REPOSO
   restingHeartRate: number | string = '--';
 
+  // Métricas nocturnas más recientes (TODO: comprobar con datos reales de una noche)
+  oxigenoNocturno: number | string = '--';
+  respiracion: number | string = '--';
+  inmersion: number | string = '--';
+
   // VARIABLES DE MODO DEPORTE
   isSportMode: boolean = false;
   sportTimeoutId: any; // Temporizador para el apagado automático del modo deporte
@@ -210,6 +215,25 @@ export class RingHomePage implements OnInit {
       unidad: 'lpm',
       color: COLORES_METRICA.pulso,
       tipo: 'bar',
+    },
+    {
+      clave: 'oxigenoNocturno',
+      titulo: 'SpO2 nocturna',
+      unidad: '%',
+      color: COLORES_METRICA.spo2,
+    },
+    {
+      clave: 'respiracion',
+      titulo: 'Frecuencia respiratoria',
+      unidad: 'rpm',
+      color: COLORES_METRICA.respiracion,
+    },
+    {
+      clave: 'inmersion',
+      titulo: 'Inmersión del pulso',
+      unidad: '%',
+      color: COLORES_METRICA.inmersion,
+      decimales: 1,
     },
   ];
   puntosGraficas: Partial<Record<string, PuntoGrafica[]>> = {};
@@ -788,6 +812,92 @@ export class RingHomePage implements OnInit {
   }
 
   /**
+   * Calcula SpO2 nocturna, frecuencia respiratoria e inmersión del pulso a
+   * partir del historial descargado, y las guarda en el histórico local.
+   * TODO - Pendiente de comprobar con datos reales de una noche.
+   */
+  async calcularMetricasSueno() {
+    if (this.medicalHist.length === 0) {
+      this.avisar('Primero hay que descargar los históricos');
+      return;
+    }
+
+    const noches = await this.ringBLEservice.calculateSleep(this.medicalHist);
+    const periodos = Array.isArray(noches)
+      ? noches.map((noche: any) => noche?.SleepTimePeriod).filter(Boolean)
+      : [];
+    if (periodos.length === 0) {
+      this.avisar('No hay datos de sueño suficientes');
+      return;
+    }
+
+    const [oxigeno, respiracion, inmersion] = await Promise.all([
+      this.ringBLEservice.calcOxygenSaturation(periodos, this.medicalHist),
+      this.ringBLEservice.calcRespiratoryRate(periodos, this.medicalHist),
+      this.ringBLEservice.calculateHeartRateImmersion(
+        periodos,
+        this.medicalHist,
+      ),
+    ]);
+    console.log('Métricas nocturnas en bruto:', {
+      oxigeno,
+      respiracion,
+      inmersion,
+    });
+
+    type TipoNocturno = 'oxigenoNocturno' | 'respiracion' | 'inmersion';
+    const lote: {
+      tipo: TipoNocturno;
+      valores: Record<string, number>;
+      fecha: string;
+    }[] = [];
+
+    /** Añade un registro al lote si la marca de tiempo y el valor son válidos. */
+    const anadir = (
+      tipo: TipoNocturno,
+      campo: string,
+      marca: any,
+      valor: any,
+    ) => {
+      const fecha = new Date(marca);
+      if (!Number.isNaN(fecha.getTime()) && Number.isFinite(Number(valor))) {
+        lote.push({
+          tipo,
+          valores: { [campo]: Number(valor) },
+          fecha: fecha.toISOString(),
+        });
+      }
+    };
+    oxigeno.forEach((n: any) =>
+      anadir('oxigenoNocturno', 'spo2', n.StartTime, n.Oxygen),
+    );
+    respiracion.forEach((n: any) =>
+      anadir('respiracion', 'rpm', n.StartTime, n.respiratoryRate),
+    );
+    inmersion.forEach((n: any) =>
+      anadir('inmersion', 'porcentaje', n.time, n.heartRateImmersion),
+    );
+
+    if (lote.length === 0) {
+      this.avisar('El anillo no devolvió métricas del sueño');
+      return;
+    }
+
+    // Resumen: el dato más reciente de cada métrica
+    const ultimo = (tipo: TipoNocturno) =>
+      lote.filter((r) => r.tipo === tipo).pop()?.valores;
+    const ox = ultimo('oxigenoNocturno');
+    this.oxigenoNocturno = ox ? Math.round(ox['spo2']) : '--';
+    const resp = ultimo('respiracion');
+    this.respiracion = resp ? Math.round(resp['rpm']) : '--';
+    const inm = ultimo('inmersion');
+    this.inmersion = inm ? inm['porcentaje'] : '--';
+    this.cdr.detectChanges();
+
+    this.historialAnilloService.guardarMedicionesEnLote(lote);
+  }
+
+  /**
    * Calcula la evolución del pulso en reposo día a día, a partir del historial
    * ya descargado, y la guarda en el histórico local.
    */
@@ -847,6 +957,9 @@ export class RingHomePage implements OnInit {
       bateria = [],
       movimiento = [],
       reposo = [],
+      oxigenoNocturno: oxNoche = [],
+      respiracion: resp = [],
+      inmersion: inmer = [],
     } = await this.historialAnilloService.obtenerAgrupadoPorTipo(desde);
 
     // Las claves coinciden con las de "graficas"
@@ -859,6 +972,9 @@ export class RingHomePage implements OnInit {
       movimiento: aPuntos(movimiento, 'cuenta'),
       bateria: aPuntos(bateria, 'porcentaje'),
       reposo: aPuntos(reposo, 'bpm'),
+      oxigenoNocturno: aPuntos(oxNoche, 'spo2'),
+      respiracion: aPuntos(resp, 'rpm'),
+      inmersion: aPuntos(inmer, 'porcentaje'),
     };
 
     this.cdr.detectChanges();

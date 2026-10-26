@@ -44,6 +44,8 @@ export const COLORES_METRICA = {
   bateria: '#34c759',
   pasos: '#00c7be',
   movimiento: '#a2845e',
+  respiracion: '#30b0c7',
+  inmersion: '#ff6482',
 };
 
 /** Devuelve la fecha de inicio que corresponde al rango elegido. */

@@ -686,26 +686,61 @@ export class RingBluetooth {
   }
 
   /**
-   * TODO - Sin implementar (manual 2.5.15). Ya disponemos de calculateSleep()
-   * para obtener el sleepTimeArray necesario.
+   * Extrae la lista de resultados del SDK, que según la función llega como
+   * array directo o dentro de `{ type, result }`.
+   */
+  private extraerLista(resultado: any): any[] {
+    if (Array.isArray(resultado)) return resultado;
+    return Array.isArray(resultado?.result) ? resultado.result : [];
+  }
+
+  /**
+   * Calcula la saturación de oxígeno durante el sueño (manual 2.5.15).
+   * TODO - Pendiente de comprobar con datos reales de una noche: con datos
+   * sintéticos el SDK no detecta sueño, así que el formato de salida
+   * (`StartTime`, `EndTime`, `Oxygen`) es el del manual, sin verificar.
+   *
+   * @param sleepTimeArray - Periodos de sueño (`SleepTimePeriod` de calculateSleep).
+   * @param historicalDataArray - Historial descargado del anillo.
    */
   async calcOxygenSaturation(
     sleepTimeArray: any[],
     historicalDataArray: any[],
-  ): Promise<any> {
-    // TODO - Sin datos de sueño no se puede hacer (pero ya tenemos calculateSleep() disponible)
+  ): Promise<any[]> {
+    try {
+      return this.extraerLista(
+        SDK.default.calcOxygenSaturation(sleepTimeArray, historicalDataArray),
+      );
+    } catch (error) {
+      console.error('Error al calcular el oxígeno nocturno:', error);
+      return [];
+    }
   }
 
   /**
-   * TODO - Sin implementar (manual 2.5.16). Ya disponemos de calculateSleep()
-   * para obtener el sleepTimeArray necesario.
+   * Calcula la frecuencia respiratoria durante el sueño (manual 2.5.16).
+   * TODO - Pendiente de comprobar con datos reales (salida según el manual:
+   * `StartTime`, `EndTime`, `respiratoryRate`).
+   *
+   * @param timeStamp - -1 para todas las noches, o la marca de tiempo de un día concreto.
    */
   async calcRespiratoryRate(
     sleepTimeArray: any[],
     historicalDataArray: any[],
-    timeStamp: string,
-  ): Promise<any> {
-    // TODO - Sin datos de sueño no se puede hacer (pero ya tenemos calculateSleep() disponible)
+    timeStamp: number = -1,
+  ): Promise<any[]> {
+    try {
+      return this.extraerLista(
+        SDK.default.calcRespiratoryRate(
+          sleepTimeArray,
+          historicalDataArray,
+          timeStamp,
+        ),
+      );
+    } catch (error) {
+      console.error('Error al calcular la frecuencia respiratoria:', error);
+      return [];
+    }
   }
 
   /** Calcula el pulso en reposo a partir del historial de pulso. */
@@ -733,18 +768,38 @@ export class RingBluetooth {
   }
 
   /**
-   * TODO - Sin implementar (manual 2.5.18).
-   * TODO - El propio historicalDataArray ya contiene el pulso, se podría
-   * simplificar generando heartRateArray internamente.
+   * Calcula la inmersión del pulso (descenso nocturno respecto al diurno,
+   * manual 2.5.18). El array de pulso se genera aquí desde el propio historial.
+   * TODO - Pendiente de comprobar con datos reales (salida según el manual:
+   * `time`, `heartRateImmersion`).
+   *
+   * @param timeStamp - -1 para todas las noches, o la marca de tiempo de un día concreto.
    */
   async calculateHeartRateImmersion(
     sleepTimeArray: any[],
     historicalDataArray: any[],
-    heartRateArray: any[],
-    timeStamp: string,
-  ): Promise<any> {
-    // TODO - Sin datos de sueño no se puede hacer
-    // TODO - Se puede simplificar extrayendo heartRateArray del propio historicalDataArray
+    timeStamp: number = -1,
+  ): Promise<any[]> {
+    try {
+      const heartRateArray = historicalDataArray.map((registro) => ({
+        ts: registro.timeStamp,
+        hr: registro.heartRate,
+        hrv: registro.hrv,
+        motion: registro.motionDetectionCount,
+        steps: registro.step,
+      }));
+      return this.extraerLista(
+        SDK.default.calcHeartRateImmersion(
+          sleepTimeArray,
+          historicalDataArray,
+          heartRateArray,
+          timeStamp,
+        ),
+      );
+    } catch (error) {
+      console.error('Error al calcular la inmersión del pulso:', error);
+      return [];
+    }
   }
 
   /** Activa o desactiva el modo deporte del anillo. */

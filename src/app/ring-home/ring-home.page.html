@@ -228,6 +228,44 @@
         </div>
       </div>
 
+      <!-- Métricas del sueño (TODO: comprobar con datos reales de una noche) -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon name="moon-outline" class="color-sueno"></ion-icon>
+          <span class="nombre-sensor">Métricas del sueño</span>
+        </div>
+        <div class="valor-sensor lista-info-dispositivo">
+          <div class="fila-info">
+            <span class="etiqueta-info">SpO2 nocturna</span>
+            <span class="dato-info"
+              >{{ oxigenoNocturno | numero
+              }}{{ oxigenoNocturno !== '--' ? ' %' : '' }}</span
+            >
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Frecuencia respiratoria</span>
+            <span class="dato-info"
+              >{{ respiracion | numero
+              }}{{ respiracion !== '--' ? ' rpm' : '' }}</span
+            >
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Inmersión del pulso</span>
+            <span class="dato-info"
+              >{{ inmersion | numero: 1 }}{{ inmersion !== '--' ? ' %' : '' }}</span
+            >
+          </div>
+        </div>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="calcularMetricasSueno()"
+            >Calcular</ion-button
+          >
+        </div>
+      </div>
+
       <!-- Pulso en reposo -->
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">

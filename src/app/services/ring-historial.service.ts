@@ -19,7 +19,10 @@ interface RegistroMedicionAnillo {
     | 'pasos'
     | 'sueno'
     | 'movimiento'
-    | 'reposo';
+    | 'reposo'
+    | 'oxigenoNocturno'
+    | 'respiracion'
+    | 'inmersion';
   valores: Record<string, number>; // Los datos concretos de esa medición
   fecha: string; // Fecha y hora en formato ISO 8601 (UTC)
   sincronizado: boolean; // Para cuando tengamos sincronización con servidor
