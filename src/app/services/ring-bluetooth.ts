@@ -645,6 +645,10 @@ export class RingBluetooth {
           },
         };
 
+        // Si quedaba una medición anterior registrada, la damos de baja para no duplicar datos
+        if (this.medicionSalud) {
+          SDK.default.unregisterHealthListener(this.medicionSalud.listener);
+        }
         this.medicionSalud = {
           listener: healthListener,
           cierre: type === 'openSingleHealth' ? 'closeSingleHealth' : 'closeHealth',

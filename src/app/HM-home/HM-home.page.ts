@@ -24,8 +24,6 @@ import {
   pulseOutline,
   batteryHalfOutline,
   heartOutline,
-  checkmarkCircle,
-  warningOutline,
 } from 'ionicons/icons';
 import { HealthMonitorService } from '../services/HM-health-monitor';
 import { CommonModule } from '@angular/common';
@@ -204,8 +202,6 @@ export class HomePage implements OnInit {
       waterOutline,
       pulseOutline,
       heartOutline,
-      checkmarkCircle,
-      warningOutline,
     });
   }
 
@@ -343,6 +339,7 @@ export class HomePage implements OnInit {
 
   /** Detiene la medición activa (oxígeno, presión o ECG) en el monitor. */
   cancelarMedicion() {
+    this.ecgAnimacionActiva = false;
     if (this.medicionActiva) this.LTS.cancelarMedicion(this.medicionActiva);
     this.midiendoOX = false;
     this.midiendoBP = false;

@@ -27,9 +27,4 @@ export const routes: Routes = [
     redirectTo: 'tabs',
     pathMatch: 'full',
   },
-  {
-    path: 'ring-home',
-    loadComponent: () =>
-      import('./ring-home/ring-home.page').then((m) => m.RingHomePage),
-  },
 ];

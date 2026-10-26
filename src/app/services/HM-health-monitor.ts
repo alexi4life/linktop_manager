@@ -1,20 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { AvisosService } from './avisos.service';
 import { BleClient } from '@capacitor-community/bluetooth-le';
-import { ExceptionCode } from '@capacitor/core';
-
-declare var Engine: any;
 
 // Parametros de conexión del bluetooth (health monitor)
 const HM_UUIDS = {
   SERVICE_HEALTH_DETECT: '0000ff27-0000-1000-8000-00805f9b34fb',
   CHARACTERISTIC_HEART_RATE_WRITE: '0000fff1-0000-1000-8000-00805f9b34fb',
   CHARACTERISTIC_HEART_RATE_MEASUREMENT: '0000fff4-0000-1000-8000-00805f9b34fb',
-  DESCRIPTORS_GENERAL: '00002901-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_SER_UUID: '0000180a-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_FIRMWARE_REV_UUID: '00002a26-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_HARDWARE_PCB_UUID: '00002a27-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_SOFTWARE_REV_UUID: '00002a28-0000-1000-8000-00805f9b34fb',
 };
 
 // Tipos de medición, tal como los define el manual oficial del HC03 (sección 2.3.2)
@@ -370,6 +362,12 @@ export class HealthMonitorService {
   async cancelarMedicion(tipo: 'OX' | 'BP' | 'BG' | 'BT' | 'ECG' | 'BATTERY') {
     if (this.SDK && this.SDK.stopDetect) {
       this.cancelado = true;
+      // El stopDetect emite onModeChange(null) al instante: si el oxígeno no
+      // está ya cerrado, se tomaría la parada del usuario por una interrupción
+      if (tipo === 'OX') {
+        this.medicionOXFinalizando = true;
+        this.oxigenoActivo = false;
+      }
       this.SDK.stopDetect(Detection[tipo]);
       this.SDK.unRegisterOXListener();
       this.SDK.unRegisterBPListener();

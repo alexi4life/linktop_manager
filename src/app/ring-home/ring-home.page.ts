@@ -332,21 +332,17 @@ export class RingHomePage implements OnInit {
     if (savedID) {
       this.ringID = savedID;
       this.hasRing = true;
-    }
 
-    console.log(
-      'Detectado anillo previamente vinculado. Conectando automáticamente...',
-    );
-
-    // Si hay ID guardado, intentamos reconectar sin pasar por el escaneo manual
-    const conectadoOk = await this.ringBLEservice.connectSilently(this.ringID);
-    if (conectadoOk) {
-      await this.ringBLEservice.timesynchro();
-      await this.ringBLEservice.receiveData();
-      console.log('Se ha reconectado con el anillo');
-      this.iniciarDescargaHistoricosAutomatica();
-    } else {
-      console.warn('No se ha detectado anillo vinculado');
+      // Reconectamos sin pasar por el escaneo manual
+      const conectadoOk = await this.ringBLEservice.connectSilently(savedID);
+      if (conectadoOk) {
+        await this.ringBLEservice.timesynchro();
+        await this.ringBLEservice.receiveData();
+        console.log('Se ha reconectado con el anillo');
+        this.iniciarDescargaHistoricosAutomatica();
+      } else {
+        console.warn('No se ha podido reconectar con el anillo vinculado');
+      }
     }
 
     // Suscripción al estado de conexión (se actualiza solo/desconecta cada ~30s)
@@ -387,7 +383,7 @@ export class RingHomePage implements OnInit {
       this.cdr.detectChanges();
     });
 
-    // Suscripción a la información 5 del dispositivo (número de serie, vinculación...)
+    // Suscripción a la información 5 del dispositivo (pulso y oxígeno automático)
     this.escuchar(this.ringBLEservice.deviceInfo5$, (data: any) => {
       this.hrMeasurementTime = data.hrMeasurementTime;
       this.oxMeasurementInterval = data.oxMeasurementInterval;
@@ -700,7 +696,11 @@ export class RingHomePage implements OnInit {
 
     // Red de seguridad: si el anillo se desconecta no llega respuesta alguna
     this.temporizadorMedicion = setTimeout(
-      () => this.finalizarMedicion('El anillo no respondió a tiempo.'),
+      () => {
+        // Damos de baja el listener para que una respuesta tardía no se guarde
+        this.ringBLEservice.detenerMedicionSalud();
+        this.finalizarMedicion('El anillo no respondió a tiempo.');
+      },
       TIEMPO_MAXIMO_MEDICION_MS,
     );
 
@@ -834,7 +834,7 @@ export class RingHomePage implements OnInit {
 
   /** Limpia todos los datos históricos guardados en el propio anillo. */
   async clearHistData() {
-    await this.ringBLEservice.sendData('cleanHistoricalData');
+    await this.ringBLEservice.clearHistoricalData();
   }
 
   /**
@@ -870,8 +870,8 @@ export class RingHomePage implements OnInit {
         this.lightSleepTime = noche?.LightTime || '--';
         this.REMsleepTime = noche?.RemTime || '--';
         this.wakeTime = noche?.WakeTime || '--';
-        this.sleepStartTime = noche?.SleepTimePeriod.startTime || '--';
-        this.sleepEndTime = noche?.SleepTimePeriod.endTime || '--';
+        this.sleepStartTime = noche?.SleepTimePeriod?.startTime || '--';
+        this.sleepEndTime = noche?.SleepTimePeriod?.endTime || '--';
 
         this.historialAnilloService.guardarMedicion(
           'sueno',
