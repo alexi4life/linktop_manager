@@ -4,11 +4,13 @@ import {
   ChangeDetectorRef,
   DestroyRef,
   inject,
+  ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, debounceTime } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { OndaSenalComponent } from '../components/onda-senal/onda-senal.component';
 import { HistorialAnilloService } from '../services/ring-historial.service';
 import {
   IonContent,
@@ -81,6 +83,7 @@ const TIEMPO_MAXIMO_MEDICION_MS = 60_000;
     SegmentoIosComponent,
     EstadoConexionComponent,
     IndicadorMedicionComponent,
+    OndaSenalComponent,
     NumeroPipe,
   ],
 })
@@ -109,9 +112,16 @@ export class RingHomePage implements OnInit {
   temperatura: number | string = '--';
 
   // Medición puntual en curso (para mostrar "Midiendo…") y error de la última
-  midiendo: 'pulso' | 'oxigeno' | 'temperatura' | null = null;
+  midiendo: 'pulso' | 'oxigeno' | 'temperatura' | 'ecg' | null = null;
   errorMedicion: string | null = null;
   private temporizadorMedicion: any;
+
+  // ELECTROCARDIOGRAMA (calculado por el anillo)
+  @ViewChild('ondaECG') ondaECG?: OndaSenalComponent;
+  ecgBpm: number | string = '--';
+  ecgRmssd: number | string = '--';
+  dedoEcg = false; // true mientras el dedo toca el electrodo
+  ecgAviso: string | null = null; // Conclusión de la detección de arritmias
 
   // VARIABLES DE INFORMACIÓN DEL DISPOSITIVO
   bleAddress: string = '--';
@@ -215,6 +225,18 @@ export class RingHomePage implements OnInit {
       unidad: 'lpm',
       color: COLORES_METRICA.pulso,
       tipo: 'bar',
+    },
+    {
+      clave: 'ecgBpm',
+      titulo: 'ECG - pulso',
+      unidad: 'lpm',
+      color: COLORES_METRICA.ecg,
+    },
+    {
+      clave: 'ecgRmssd',
+      titulo: 'ECG - HRV (RMSSD)',
+      unidad: 'ms',
+      color: COLORES_METRICA.hrv,
     },
     {
       clave: 'oxigenoNocturno',
@@ -411,6 +433,18 @@ export class RingHomePage implements OnInit {
         'No se obtuvo una lectura estable. Mantén el anillo quieto e inténtalo de nuevo.',
       );
     });
+
+    // ECG: onda en vivo, dedo sobre el electrodo y resultados del anillo
+    this.escuchar(this.ringBLEservice.ecgOnda$, (puntos) =>
+      this.ondaECG?.agregar(puntos),
+    );
+    this.escuchar(this.ringBLEservice.ecgDedo$, (tocando) => {
+      this.dedoEcg = tocando;
+      this.cdr.detectChanges();
+    });
+    this.escuchar(this.ringBLEservice.ecgResultado$, (datos) =>
+      this.procesarResultadoEcg(datos),
+    );
 
     // Suscripción al estado de la batería
     this.escuchar(this.ringBLEservice.batteryData$, (data: any) => {
@@ -642,7 +676,9 @@ export class RingHomePage implements OnInit {
       | 'deviceInfo5'
       | 'historicalData'
       | 'historicalNum'
-      | 'step',
+      | 'step'
+      | 'ecg'
+      | 'closeEcg',
     registerNumber: number = 0,
   ): Promise<boolean> {
     const savedID = localStorage.getItem('anillo_vinculado');
@@ -708,6 +744,63 @@ export class RingHomePage implements OnInit {
   async measuringHRV() {
     this.modoMedicionActual = 'hrv';
     await this.iniciarMedicion('pulso', 'openSingleHealth');
+  }
+
+  /** Inicia el electrocardiograma; se detiene solo al tener resultado o tras 60 s. */
+  async medirECG() {
+    this.midiendo = 'ecg';
+    this.errorMedicion = null;
+    this.ecgAviso = null;
+    this.dedoEcg = false;
+    this.ondaECG?.limpiar();
+
+    this.temporizadorMedicion = setTimeout(
+      () => this.detenerECG('No se completó el ECG. Mantén el dedo sobre el electrodo.'),
+      TIEMPO_MAXIMO_MEDICION_MS,
+    );
+
+    const enviado = await this.startMeasuring('ecg');
+    if (!enviado) this.finalizarMedicion();
+  }
+
+  /** Detiene el ECG en curso, mostrando opcionalmente un error. */
+  async detenerECG(error: string | null = null) {
+    await this.startMeasuring('closeEcg');
+    this.finalizarMedicion(error);
+  }
+
+  /**
+   * Procesa los resultados del ECG calculados por el anillo. Cuando la detección
+   * de arritmias termina (resultOfArrhythmia distinto de 0) guarda y detiene.
+   */
+  private procesarResultadoEcg(datos: any) {
+    // heartRate: 0 = no válido, 1 = menos de 40, 254 = más de 200; avgHr es la media
+    const bpm = datos.avgHr > 1 && datos.avgHr < 254 ? datos.avgHr : null;
+    if (bpm !== null) this.ecgBpm = bpm;
+    if (datos.rmssd > 0) this.ecgRmssd = Math.round(datos.rmssd);
+
+    if (datos.resultOfArrhythmia === 0) {
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const conclusiones: Record<number, string> = {
+      1: 'Sin anomalías detectadas',
+      2: 'Señal insuficiente: mantén el dedo quieto y repite',
+      3: 'Bradicardia detectada',
+      4: 'Posible fibrilación auricular',
+      5: 'Taquicardia detectada',
+      6: 'Se detectan anomalías',
+    };
+    this.ecgAviso = conclusiones[datos.resultOfArrhythmia] ?? null;
+
+    if (datos.resultOfArrhythmia !== 2 && bpm !== null) {
+      this.historialAnilloService.guardarMedicion('ecg', {
+        bpm,
+        rmssd: Number(this.ecgRmssd) || 0,
+      });
+    }
+    this.detenerECG();
   }
 
   /** Solicita la temperatura del dedo al anillo. */
@@ -957,6 +1050,7 @@ export class RingHomePage implements OnInit {
       bateria = [],
       movimiento = [],
       reposo = [],
+      ecg = [],
       oxigenoNocturno: oxNoche = [],
       respiracion: resp = [],
       inmersion: inmer = [],
@@ -972,6 +1066,8 @@ export class RingHomePage implements OnInit {
       movimiento: aPuntos(movimiento, 'cuenta'),
       bateria: aPuntos(bateria, 'porcentaje'),
       reposo: aPuntos(reposo, 'bpm'),
+      ecgBpm: aPuntos(ecg, 'bpm'),
+      ecgRmssd: aPuntos(ecg, 'rmssd'),
       oxigenoNocturno: aPuntos(oxNoche, 'spo2'),
       respiracion: aPuntos(resp, 'rpm'),
       inmersion: aPuntos(inmer, 'porcentaje'),

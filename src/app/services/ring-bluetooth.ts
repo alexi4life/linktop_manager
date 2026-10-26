@@ -52,6 +52,8 @@ export class RingBluetooth {
     listener: any;
     cierre: 'closeHealth' | 'closeSingleHealth';
   } | null = null;
+  // Listeners del ECG en curso (mismo objeto para poder darlos de baja)
+  private bajaListenersEcg: (() => void) | null = null;
   private ultimoDeviceId: string | null = null;
   private intentosReconexionHistoricos: number = 0; // Reconexiones hechas en la descarga actual
   private listenerHistoricos: any = null; // Mismo objeto registrado, necesario para poder darlo de baja
@@ -72,6 +74,9 @@ export class RingBluetooth {
   public deviceInfo5$ = new Subject<any>();
   public historicalDataCompleta$ = new Subject<void>(); // Avisa cuando la descarga de históricos termina de verdad
   public historicalDataAbortada$ = new Subject<void>(); // Avisa si la descarga se corta antes de recibirlo todo
+  public ecgOnda$ = new Subject<number[]>(); // Puntos de la onda del ECG en tiempo real
+  public ecgResultado$ = new Subject<any>(); // Resultados que calcula el anillo (pulso, HRV, arritmia...)
+  public ecgDedo$ = new Subject<boolean>(); // true cuando el dedo toca el electrodo
 
   constructor() {}
   /**
@@ -424,6 +429,12 @@ export class RingBluetooth {
       if (type === 'closeHealth' || type === 'closeSingleHealth') {
         await this.sendData(type);
         return;
+      } else if (type === 'ecg') {
+        await this.iniciarEcg();
+        return;
+      } else if (type === 'closeEcg') {
+        await this.detenerEcg();
+        return;
       } else if (type === 'temperature') {
         const temperatureListener = {
           onResult: async (data: any) => {
@@ -660,6 +671,43 @@ export class RingBluetooth {
     this.medicionSalud = null;
     SDK.default.unregisterHealthListener(listener);
     await this.sendData(cierre);
+  }
+
+  /**
+   * Inicia el electrocardiograma con el algoritmo del propio anillo (manual 2.5.28,
+   * dispSrc=1): emite la onda, el dedo puesto y los resultados calculados.
+   */
+  async iniciarEcg(): Promise<void> {
+    await this.detenerEcg(); // Por si quedara un ECG anterior registrado
+
+    const ondaListener = {
+      onResult: (data: any) => this.ecgOnda$.next(data.ecgList ?? []),
+    };
+    const resultadoListener = {
+      onResult: (data: any) => this.ecgResultado$.next(data),
+    };
+    const dedoListener = {
+      onResult: (data: any) => this.ecgDedo$.next(data.fingerDetect === 1),
+    };
+    SDK.default.registerEcgAlgorithmDataListener(ondaListener);
+    SDK.default.registerEcgAlgorithmResultListener(resultadoListener);
+    SDK.default.registerEcgFingerDetectListener(dedoListener);
+    this.bajaListenersEcg = () => {
+      SDK.default.unregisterEcgAlgorithmDataListener(ondaListener);
+      SDK.default.unregisterEcgAlgorithmResultListener(resultadoListener);
+      SDK.default.unregisterEcgFingerDetectListener(dedoListener);
+    };
+
+    // samplingRate 3 = 512 Hz (por defecto); dispSrc 1 = salida del algoritmo del anillo
+    await this.sendData('handleEcg', { samplingRate: 3, switch: 1, dispSrc: 1 });
+  }
+
+  /** Detiene el ECG: apaga el sensor del anillo y da de baja sus listeners. */
+  async detenerEcg(): Promise<void> {
+    if (!this.bajaListenersEcg) return;
+    this.bajaListenersEcg();
+    this.bajaListenersEcg = null;
+    await this.sendData('handleEcg', { samplingRate: 3, switch: 0, dispSrc: 1 });
   }
 
   /**

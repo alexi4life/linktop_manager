@@ -20,6 +20,7 @@ interface RegistroMedicionAnillo {
     | 'sueno'
     | 'movimiento'
     | 'reposo'
+    | 'ecg'
     | 'oxigenoNocturno'
     | 'respiracion'
     | 'inmersion';

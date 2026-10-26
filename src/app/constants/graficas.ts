@@ -44,6 +44,7 @@ export const COLORES_METRICA = {
   bateria: '#34c759',
   pasos: '#00c7be',
   movimiento: '#a2845e',
+  ecg: '#ff2d55',
   respiracion: '#30b0c7',
   inmersion: '#ff6482',
 };

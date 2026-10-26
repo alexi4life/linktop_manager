@@ -113,6 +113,47 @@
         </div>
       </div>
 
+      <!-- Electrocardiograma (lo calcula el anillo) -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon name="heart-outline" class="color-ecg"></ion-icon>
+          <span class="nombre-sensor">Electrocardiograma</span>
+        </div>
+        <div
+          class="valor-sensor"
+          [class.valor-vacio]="ecgBpm === '--' && midiendo !== 'ecg'"
+        >
+          <app-indicador-medicion
+            *ngIf="midiendo === 'ecg'; else valorEcg"
+            [sinDedo]="!dedoEcg"
+          ></app-indicador-medicion>
+          <ng-template #valorEcg>
+            {{ ecgBpm | numero }}<span class="unidad-sensor">lpm</span>
+            &nbsp;{{ ecgRmssd | numero }}<span class="unidad-sensor">ms</span>
+          </ng-template>
+        </div>
+        <div
+          style="width: 100%"
+          [hidden]="midiendo !== 'ecg' && ecgBpm === '--'"
+        >
+          <app-onda-senal #ondaECG color="#ff2d55"></app-onda-senal>
+        </div>
+        <p class="subtitulo-sensor" *ngIf="ecgAviso && midiendo !== 'ecg'">
+          {{ ecgAviso }}
+        </p>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            [class.boton-detener]="midiendo === 'ecg'"
+            (click)="midiendo === 'ecg' ? detenerECG() : medirECG()"
+            [disabled]="midiendo !== null && midiendo !== 'ecg'"
+          >
+            {{ midiendo === 'ecg' ? 'Detener' : 'Medir' }}
+          </ion-button>
+        </div>
+      </div>
+
       <!-- Temperatura -->
       <div class="tarjeta-sensor">
         <div class="cabecera-sensor">
