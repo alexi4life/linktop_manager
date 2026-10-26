@@ -174,38 +174,6 @@ export class HealthMonitorService {
   }
 
   /**
-   * Lee del servicio estándar de información del dispositivo (0x180a) las
-   * versiones de firmware, hardware y software del monitor.
-   *
-   * @returns Las tres versiones; las que no se puedan leer quedan como '—'.
-   */
-  async leerVersiones(): Promise<{
-    firmware: string;
-    hardware: string;
-    software: string;
-  }> {
-    const leer = async (caracteristica: string): Promise<string> => {
-      try {
-        const valor = await BleClient.read(
-          this.dispositivoConectado.deviceId,
-          HM_UUIDS.DEV_INFO_SER_UUID,
-          caracteristica,
-        );
-        return new TextDecoder().decode(valor).replace(/\u0000/g, '').trim() || '—';
-      } catch (error) {
-        console.log('[VERSIONES] No se pudo leer', caracteristica, error);
-        return '—';
-      }
-    };
-
-    return {
-      firmware: await leer(HM_UUIDS.DEV_INFO_FIRMWARE_REV_UUID),
-      hardware: await leer(HM_UUIDS.DEV_INFO_HARDWARE_PCB_UUID),
-      software: await leer(HM_UUIDS.DEV_INFO_SOFTWARE_REV_UUID),
-    };
-  }
-
-  /**
    * Obtiene la información del dispositivo Bluetooth que se encuentra actualmente
    * conectado o en proceso de conexión.
    *
@@ -261,14 +229,12 @@ export class HealthMonitorService {
    * @param onDedo - (Opcional) Notifica si el dedo está o no sobre el sensor.
    * @param onEnd - (Opcional) La medición finaliza con éxito tras cumplir el tiempo.
    * @param onInterrumpida - (Opcional) La medición terminó antes de tiempo.
-   * @param onOnda - (Opcional) Recibe la señal infrarroja (PPG) en tiempo real para dibujar la onda.
    */
   medicionOxigeno(
     callback: (spo2: number, hr: number) => void,
     onDedo?: (tocando: boolean) => void,
     onEnd?: () => void,
     onInterrumpida?: () => void,
-    onOnda?: (valores: number[]) => void,
   ) {
     let tiempoInicio = Date.now();
     this.cancelado = false;
@@ -325,12 +291,7 @@ export class HealthMonitorService {
           console.log('[SDK-OX] Excepción en oxímetro:', error);
           this.avisos.error('Error del oxímetro del Health Monitor');
         },
-        // TODO - Pendiente de comprobar en el dispositivo que `ir` es la onda del pulso
-        onRawResult: (red: any, ir: any) => {
-          if (this.medicionOXFinalizando || !onOnda) return;
-          const valores = (Array.isArray(ir) ? ir : [ir]).map(Number);
-          onOnda(valores.filter((v) => Number.isFinite(v)));
-        },
+        onRawResult: (red: any, ir: any) => {},
         onFinger: (isTouch: boolean) => {
           // Igual que en ECG: si ya cerramos, no reaccionamos a más avisos
           if (this.medicionOXFinalizando) return;

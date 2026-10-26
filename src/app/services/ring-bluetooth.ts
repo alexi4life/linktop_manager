@@ -31,8 +31,8 @@ const MAX_RECONEXIONES_HISTORICOS = 3;
 //   8) 2.5.29 - Filtrado de datos históricos (ObtainValidHistoricalData) — sustituido por
 //      nuestro propio filtro de validez (isWorn/notCharging/validHeartRate), ver activateMeasurements
 //   9) 2.5.30-2.5.31 - Fluctuación de temperatura y estrés (el manual dice que son solo demo)
-//   10) 2.5.32 - Umbral de conteo de pasos — el comando 'stepThreshold' no existe en el
-//      ringSDK.js del proyecto (comprobado ejecutándolo en Node); requeriría otra versión del SDK
+//   10) 2.5.32 - Umbral de pasos (ajuste de sensibilidad del contador): este SDK no incluye
+//      ese comando, así que no se puede implementar
 
 @Injectable({
   providedIn: 'root',
@@ -54,9 +54,6 @@ export class RingBluetooth {
   } | null = null;
   // Listeners del ECG en curso (mismo objeto para poder darlos de baja)
   private bajaListenersEcg: (() => void) | null = null;
-  // PPG en curso: frecuencia de muestreo (la informa el anillo en Info 2) y listener registrado
-  private frecuenciaMuestreo: number | null = null;
-  private listenerPpg: any = null;
   private ultimoDeviceId: string | null = null;
   private intentosReconexionHistoricos: number = 0; // Reconexiones hechas en la descarga actual
   private listenerHistoricos: any = null; // Mismo objeto registrado, necesario para poder darlo de baja
@@ -77,16 +74,9 @@ export class RingBluetooth {
   public deviceInfo5$ = new Subject<any>();
   public historicalDataCompleta$ = new Subject<void>(); // Avisa cuando la descarga de históricos termina de verdad
   public historicalDataAbortada$ = new Subject<void>(); // Avisa si la descarga se corta antes de recibirlo todo
-  public ecgOnda$ = new Subject<number[]>(); // Puntos de la onda del ECG en tiempo real
   public ecgResultado$ = new Subject<any>(); // Resultados que calcula el anillo (pulso, HRV, arritmia...)
-  public ecgDedo$ = new Subject<boolean>(); // true cuando el dedo toca el electrodo
-  public ppgOnda$ = new Subject<number[]>(); // Muestras de la onda del pulso (PPG, infrarrojo) mientras mide oxígeno
 
-  constructor() {
-    this.deviceInfo2$.subscribe((info) => {
-      if (info?.samplingRate) this.frecuenciaMuestreo = info.samplingRate;
-    });
-  }
+  constructor() {}
   /**
    * Escanea dispositivos Bluetooth cercanos filtrando por el UUID del NexRing.
    */
@@ -320,8 +310,6 @@ export class RingBluetooth {
    * que se escriben directamente en la característica BLE de escritura del anillo.
    */
   async sendData(cmd: string, data: any = null): Promise<void> {
-    // Al cerrar el sensor de salud termina también la onda del pulso
-    if (cmd === 'closeHealth' || cmd === 'closeSingleHealth') this.detenerPpg();
     if (!this.ring_device) return;
 
     try {
@@ -663,45 +651,10 @@ export class RingBluetooth {
         };
         SDK.default.registerHealthListener(healthListener);
         await this.sendData(type);
-        if (type === 'openHealth') await this.iniciarPpg();
       }
     } catch (error) {
       console.error('El error es: ', error);
     }
-  }
-
-  /**
-   * Activa la onda del pulso (PPG infrarrojo, manual 2.5.23) mientras mide el
-   * oxígeno, para dibujarla en tiempo real. Requiere la frecuencia de muestreo
-   * del anillo (Info 2); si no se conoce, se consulta antes.
-   * TODO - Pendiente de comprobar en el anillo el formato de las muestras.
-   */
-  private async iniciarPpg(): Promise<void> {
-    if (!this.frecuenciaMuestreo) {
-      await this.activateMeasurements('deviceInfo2');
-      await timemgt.sleep(500);
-    }
-    if (!this.frecuenciaMuestreo) return; // Sin frecuencia no se puede activar
-
-    this.detenerPpg();
-    this.listenerPpg = {
-      onResult: (data: any) => {
-        const muestras = Array.isArray(data) ? data : (data?.irOrGreen ?? []);
-        this.ppgOnda$.next(muestras.map(Number).filter(Number.isFinite));
-      },
-    };
-    SDK.default.registerIRresouceListener(this.listenerPpg);
-    await this.sendData('setHealthPara', {
-      samplingRate: this.frecuenciaMuestreo,
-      switch: 1,
-    });
-  }
-
-  /** Da de baja el listener del PPG (el sensor lo apaga el propio cierre de salud). */
-  private detenerPpg(): void {
-    if (!this.listenerPpg) return;
-    SDK.default.unregisterIRresouceListener(this.listenerPpg);
-    this.listenerPpg = null;
   }
 
   /**
@@ -720,27 +673,17 @@ export class RingBluetooth {
 
   /**
    * Inicia el electrocardiograma con el algoritmo del propio anillo (manual 2.5.28,
-   * dispSrc=1): emite la onda, el dedo puesto y los resultados calculados.
+   * dispSrc=1): emite los resultados calculados (pulso, HRV, arritmia).
    */
   async iniciarEcg(): Promise<void> {
     await this.detenerEcg(); // Por si quedara un ECG anterior registrado
 
-    const ondaListener = {
-      onResult: (data: any) => this.ecgOnda$.next(data.ecgList ?? []),
-    };
     const resultadoListener = {
       onResult: (data: any) => this.ecgResultado$.next(data),
     };
-    const dedoListener = {
-      onResult: (data: any) => this.ecgDedo$.next(data.fingerDetect === 1),
-    };
-    SDK.default.registerEcgAlgorithmDataListener(ondaListener);
     SDK.default.registerEcgAlgorithmResultListener(resultadoListener);
-    SDK.default.registerEcgFingerDetectListener(dedoListener);
     this.bajaListenersEcg = () => {
-      SDK.default.unregisterEcgAlgorithmDataListener(ondaListener);
       SDK.default.unregisterEcgAlgorithmResultListener(resultadoListener);
-      SDK.default.unregisterEcgFingerDetectListener(dedoListener);
     };
 
     // samplingRate 3 = 512 Hz (por defecto); dispSrc 1 = salida del algoritmo del anillo

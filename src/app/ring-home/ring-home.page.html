@@ -100,14 +100,6 @@
             {{ oxigeno | numero }}<span class="unidad-sensor">%</span>
           </ng-template>
         </div>
-        <!-- Onda del pulso en un círculo (ojo de buey) mientras mide -->
-        <div style="width: 100%" [hidden]="midiendo !== 'oxigeno'">
-          <app-onda-senal
-            #ondaOX
-            [circular]="true"
-            color="#32ade6"
-          ></app-onda-senal>
-        </div>
         <div class="boton-medir">
           <ion-button
             expand="block"
@@ -133,18 +125,11 @@
         >
           <app-indicador-medicion
             *ngIf="midiendo === 'ecg'; else valorEcg"
-            [sinDedo]="!dedoEcg"
           ></app-indicador-medicion>
           <ng-template #valorEcg>
             {{ ecgBpm | numero }}<span class="unidad-sensor">lpm</span>
             &nbsp;{{ ecgRmssd | numero }}<span class="unidad-sensor">ms</span>
           </ng-template>
-        </div>
-        <div
-          style="width: 100%"
-          [hidden]="midiendo !== 'ecg' && ecgBpm === '--'"
-        >
-          <app-onda-senal #ondaECG color="#ff2d55"></app-onda-senal>
         </div>
         <p class="subtitulo-sensor" *ngIf="ecgAviso && midiendo !== 'ecg'">
           {{ ecgAviso }}

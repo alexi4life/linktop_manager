@@ -22,13 +22,11 @@ import {
   thermometerOutline,
   waterOutline,
   pulseOutline,
-  informationCircleOutline,
   batteryHalfOutline,
   heartOutline,
   checkmarkCircle,
   warningOutline,
 } from 'ionicons/icons';
-import { OndaSenalComponent } from '../components/onda-senal/onda-senal.component';
 import { HealthMonitorService } from '../services/HM-health-monitor';
 import { CommonModule } from '@angular/common';
 import { HistorialService } from '../services/HM-historial.service';
@@ -67,7 +65,6 @@ import {
     SegmentoIosComponent,
     EstadoConexionComponent,
     IndicadorMedicionComponent,
-    OndaSenalComponent,
     NumeroPipe,
   ],
 })
@@ -93,11 +90,6 @@ export class HomePage implements OnInit {
   spo2: number | null = null;
   pulso: number | null = null;
   dedoPuesto: boolean = true;
-  /** Versiones del monitor (servicio 0x180a); null hasta conectar. */
-  versiones: { firmware: string; hardware: string; software: string } | null =
-    null;
-
-  @ViewChild('ondaOX') ondaOX?: OndaSenalComponent; // Onda del pulso mientras mide oxígeno
   errorOxigeno: string | null = null;
 
   // VARIABLES BATERÍA
@@ -211,7 +203,6 @@ export class HomePage implements OnInit {
       batteryHalfOutline,
       waterOutline,
       pulseOutline,
-      informationCircleOutline,
       heartOutline,
       checkmarkCircle,
       warningOutline,
@@ -245,7 +236,6 @@ export class HomePage implements OnInit {
     // Si el usuario cancela el escaneo, volvemos a "sin conectar"
     this.estadoConexion = this.conectado ? 'conectado' : 'sin-conectar';
     this.nombreDispositivo = this.LTS.nombreDispositivo;
-    if (this.conectado) this.versiones = await this.LTS.leerVersiones();
   }
 
   /** Indica si hay alguna medición en curso, para bloquear el resto de botones. */
@@ -282,7 +272,6 @@ export class HomePage implements OnInit {
     this.pulso = null;
     this.dedoPuesto = false; // Hasta que el sensor detecte el dedo
     this.errorOxigeno = null;
-    this.ondaOX?.limpiar();
 
     let spo2Temp: number | null = null;
     let pulsoTemp: number | null = null;
@@ -328,7 +317,6 @@ export class HomePage implements OnInit {
           'Medición interrumpida. Vuelva a intentarlo manteniendo el dedo apoyado.';
         this.cdr.detectChanges();
       },
-      (valores) => this.ondaOX?.agregar(valores),
     );
   }
 

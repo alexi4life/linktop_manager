@@ -104,31 +104,6 @@
         </div>
       </div>
 
-      <!-- TARJETA: Información del dispositivo -->
-      <div class="tarjeta-sensor tarjeta-ancha" *ngIf="versiones">
-        <div class="cabecera-sensor">
-          <ion-icon
-            name="information-circle-outline"
-            class="color-info"
-          ></ion-icon>
-          <span class="nombre-sensor">Información del dispositivo</span>
-        </div>
-        <div class="valor-sensor lista-info-dispositivo">
-          <div class="fila-info">
-            <span class="etiqueta-info">Firmware</span>
-            <span class="dato-info">{{ versiones.firmware }}</span>
-          </div>
-          <div class="fila-info">
-            <span class="etiqueta-info">Hardware</span>
-            <span class="dato-info">{{ versiones.hardware }}</span>
-          </div>
-          <div class="fila-info">
-            <span class="etiqueta-info">Software</span>
-            <span class="dato-info">{{ versiones.software }}</span>
-          </div>
-        </div>
-      </div>
-
       <!-- TARJETA: Oxígeno y pulso -->
       <div class="tarjeta-sensor tarjeta-ancha">
         <div class="cabecera-sensor">
@@ -155,15 +130,6 @@
             </ng-container>
           </ng-template>
           <ng-template #vacioOX>—</ng-template>
-        </div>
-
-        <!-- Onda del pulso en un círculo (ojo de buey) mientras mide -->
-        <div style="width: 100%" [hidden]="!midiendoOX">
-          <app-onda-senal
-            #ondaOX
-            [circular]="true"
-            color="#32ade6"
-          ></app-onda-senal>
         </div>
 
         <p class="subtitulo-sensor" *ngIf="midiendoOX && dedoPuesto">
