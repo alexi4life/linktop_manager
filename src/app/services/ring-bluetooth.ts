@@ -475,10 +475,21 @@ export class RingBluetooth {
         // Evita contar/emitir el mismo registro dos veces si el anillo reenvía
         // datos ya recibidos tras una reconexión automática
         const seenUuids = new Set<number>();
+        // Para saber si, tras reconectar, el anillo continúa o reenvía desde el principio
+        let repetidos = 0;
+        let reconexionVista = 0;
 
         const historicalDataListener = {
           onResult: async (data: any) => {
-            if (seenUuids.has(data.uuid)) return; // Registro duplicado, lo ignoramos
+            const duplicado = seenUuids.has(data.uuid);
+            if (duplicado) repetidos++;
+            if (this.intentosReconexionHistoricos !== reconexionVista) {
+              reconexionVista = this.intentosReconexionHistoricos;
+              console.log(
+                `[HISTÓRICOS] Tras la reconexión ${reconexionVista}, el primer registro es ${duplicado ? 'REPETIDO (reenvía desde el principio)' : 'NUEVO (continúa donde lo dejó)'} | únicos recibidos: ${seenUuids.size}`,
+              );
+            }
+            if (duplicado) return; // Registro duplicado, lo ignoramos
             seenUuids.add(data.uuid);
 
             // Filtro de validez movido aquí desde el front: solo emitimos registros
@@ -496,7 +507,7 @@ export class RingBluetooth {
 
             if (register_counter >= reghistNum) {
               console.log(
-                '✅ DESCARGA COMPLETA: se han recibido todos los registros históricos',
+                `✅ DESCARGA COMPLETA: se han recibido todos los registros históricos (repetidos descartados: ${repetidos})`,
               );
               this.descargandoHistoricos = false; // Descarga completa, desactivamos el control
               SDK.default.unregisterHistoricalDataListener(

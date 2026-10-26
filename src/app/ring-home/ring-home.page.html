@@ -21,7 +21,7 @@
   <!-- ===== SECCIÓN MEDIDAS ===== -->
   <div *ngIf="seccion === 'medidas'">
     <!-- Botón para vincular por primera vez (nunca ha habido anillo vinculado) -->
-    <div *ngIf="!hasRing" class="ion-text-center ion-margin-top">
+    <div *ngIf="!hasRing" class="ion-text-center ion-margin-vertical">
       <ion-button
         expand="block"
         class="boton-ios"
@@ -35,7 +35,10 @@
     <!-- Botón para reconectar a mano: aparece cuando hay anillo vinculado pero
        no está conectado ahora mismo (por ejemplo, si la reconexión automática
        falló por limitaciones del navegador) -->
-    <div *ngIf="hasRing && !connected" class="ion-text-center ion-margin-top">
+    <div
+      *ngIf="hasRing && !connected"
+      class="ion-text-center ion-margin-vertical"
+    >
       <ion-button
         expand="block"
         class="boton-ios"

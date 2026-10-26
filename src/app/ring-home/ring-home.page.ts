@@ -127,6 +127,7 @@ export class RingHomePage implements OnInit {
   oxMeasurementInterval: number | string = '--'; // Intervalo de medición de oxígeno, en minutos
   oxMeasurementSwitch: string = '--'; // Si el oxígeno automático está encendido o no
   oxAutomaticoActivo: boolean = false;
+  private oxAutomaticoEnAnillo = false; // Último estado conocido en el anillo, para no reenviarlo
 
   // VARIABLES DE DATOS HISTÓRICOS
   registerNum: number = 0; // Número de registros históricos disponibles
@@ -389,6 +390,13 @@ export class RingHomePage implements OnInit {
       this.oxMeasurementInterval = data.oxMeasurementInterval;
       this.oxMeasurementSwitch =
         data.oxMeasurementSwitch === 1 ? 'Encendido' : 'Apagado';
+
+      // El interruptor y el intervalo reflejan lo que tiene configurado el anillo
+      this.oxAutomaticoEnAnillo = data.oxMeasurementSwitch === 1;
+      this.oxAutomaticoActivo = this.oxAutomaticoEnAnillo;
+      if (data.oxMeasurementInterval >= 5) {
+        this.intervaloOxigenoSeleccionado = data.oxMeasurementInterval;
+      }
       this.cdr.detectChanges();
     });
 
@@ -1159,6 +1167,10 @@ export class RingHomePage implements OnInit {
    * posición, activa o desactiva la medición automática con el intervalo elegido.
    */
   async cambiarEstadoOxigenoAutomatico() {
+    // Si el cambio viene de la información del anillo, no hay nada que enviar
+    if (this.oxAutomaticoActivo === this.oxAutomaticoEnAnillo) return;
+    this.oxAutomaticoEnAnillo = this.oxAutomaticoActivo;
+
     if (this.oxAutomaticoActivo) {
       await this.activarOxigenoAutomatico();
     } else {
