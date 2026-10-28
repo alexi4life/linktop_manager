@@ -59,6 +59,7 @@ export class HealthMonitorService {
       await BleClient.initialize();
       return 'Bluetooth listo. Esperando escaneo...';
     } catch (error) {
+      this.avisos.error('No se pudo iniciar el Bluetooth');
       return 'Error al iniciar el Bluetooth' + error;
     }
   }
@@ -161,6 +162,7 @@ export class HealthMonitorService {
       return 'Conectado con éxito a ' + device.name;
     } catch (error) {
       // Captura tanto fallos de conexión como la cancelación del escaneo por parte del usuario
+      this.avisos.error('No se pudo conectar con el Health Monitor');
       return 'Error o escaneo cancelado: ' + error;
     }
   }
