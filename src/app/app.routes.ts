@@ -6,7 +6,7 @@ export const routes: Routes = [
     loadComponent: () => import('./tabs/tabs.page').then((m) => m.TabsPage),
     children: [
       {
-        path: 'linktop',
+        path: 'healthmonitor',
         loadComponent: () =>
           import('./HM-home/HM-home.page').then((m) => m.HomePage),
       },
@@ -17,7 +17,7 @@ export const routes: Routes = [
       },
       {
         path: '',
-        redirectTo: 'linktop',
+        redirectTo: 'healthmonitor',
         pathMatch: 'full',
       },
     ],
@@ -26,10 +26,5 @@ export const routes: Routes = [
     path: '',
     redirectTo: 'tabs',
     pathMatch: 'full',
-  },
-  {
-    path: 'ring-home',
-    loadComponent: () =>
-      import('./ring-home/ring-home.page').then((m) => m.RingHomePage),
   },
 ];

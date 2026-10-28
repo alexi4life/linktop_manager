@@ -113,6 +113,8 @@ export class RingHomePage implements OnInit {
   errorMedicion: string | null = null;
   private temporizadorMedicion: any;
 
+  // ELECTROCARDIOGRAMA (calculado por el anillo)
+
   // VARIABLES DE INFORMACIÓN DEL DISPOSITIVO
   bleAddress: string = '--';
   deviceVer: string = '';
@@ -122,6 +124,7 @@ export class RingHomePage implements OnInit {
   oxMeasurementInterval: number | string = '--'; // Intervalo de medición de oxígeno, en minutos
   oxMeasurementSwitch: string = '--'; // Si el oxígeno automático está encendido o no
   oxAutomaticoActivo: boolean = false;
+  private oxAutomaticoEnAnillo = false; // Último estado conocido en el anillo, para no reenviarlo
 
   // VARIABLES DE DATOS HISTÓRICOS
   registerNum: number = 0; // Número de registros históricos disponibles
@@ -137,6 +140,11 @@ export class RingHomePage implements OnInit {
 
   // VARIABLES DE PULSO EN REPOSO
   restingHeartRate: number | string = '--';
+
+  // Métricas nocturnas más recientes (TODO: comprobar con datos reales de una noche)
+  oxigenoNocturno: number | string = '--';
+  respiracion: number | string = '--';
+  inmersion: number | string = '--';
 
   // VARIABLES DE MODO DEPORTE
   isSportMode: boolean = false;
@@ -210,6 +218,25 @@ export class RingHomePage implements OnInit {
       unidad: 'lpm',
       color: COLORES_METRICA.pulso,
       tipo: 'bar',
+    },
+    {
+      clave: 'oxigenoNocturno',
+      titulo: 'SpO2 nocturna',
+      unidad: '%',
+      color: COLORES_METRICA.spo2,
+    },
+    {
+      clave: 'respiracion',
+      titulo: 'Frecuencia respiratoria',
+      unidad: 'rpm',
+      color: COLORES_METRICA.respiracion,
+    },
+    {
+      clave: 'inmersion',
+      titulo: 'Inmersión del pulso',
+      unidad: '%',
+      color: COLORES_METRICA.inmersion,
+      decimales: 1,
     },
   ];
   puntosGraficas: Partial<Record<string, PuntoGrafica[]>> = {};
@@ -291,21 +318,17 @@ export class RingHomePage implements OnInit {
     if (savedID) {
       this.ringID = savedID;
       this.hasRing = true;
-    }
 
-    console.log(
-      'Detectado anillo previamente vinculado. Conectando automáticamente...',
-    );
-
-    // Si hay ID guardado, intentamos reconectar sin pasar por el escaneo manual
-    const conectadoOk = await this.ringBLEservice.connectSilently(this.ringID);
-    if (conectadoOk) {
-      await this.ringBLEservice.timesynchro();
-      await this.ringBLEservice.receiveData();
-      console.log('Se ha reconectado con el anillo');
-      this.iniciarDescargaHistoricosAutomatica();
-    } else {
-      console.warn('No se ha detectado anillo vinculado');
+      // Reconectamos sin pasar por el escaneo manual
+      const conectadoOk = await this.ringBLEservice.connectSilently(savedID);
+      if (conectadoOk) {
+        await this.ringBLEservice.timesynchro();
+        await this.ringBLEservice.receiveData();
+        console.log('Se ha reconectado con el anillo');
+        this.iniciarDescargaHistoricosAutomatica();
+      } else {
+        console.warn('No se ha podido reconectar con el anillo vinculado');
+      }
     }
 
     // Suscripción al estado de conexión (se actualiza solo/desconecta cada ~30s)
@@ -341,17 +364,22 @@ export class RingHomePage implements OnInit {
     this.escuchar(this.ringBLEservice.deviceInfo2$, (data: any) => {
       this.sn = data.sn;
       this.bindStatus = data.bindStatus;
-      // samplingRate no se muestra: según el manual (2.5.28) solo es un
-      // parámetro de configuración del ECG, no una medición
       this.cdr.detectChanges();
     });
 
-    // Suscripción a la información 5 del dispositivo (número de serie, vinculación...)
+    // Suscripción a la información 5 del dispositivo (pulso y oxígeno automático)
     this.escuchar(this.ringBLEservice.deviceInfo5$, (data: any) => {
       this.hrMeasurementTime = data.hrMeasurementTime;
       this.oxMeasurementInterval = data.oxMeasurementInterval;
       this.oxMeasurementSwitch =
         data.oxMeasurementSwitch === 1 ? 'Encendido' : 'Apagado';
+
+      // El interruptor y el intervalo reflejan lo que tiene configurado el anillo
+      this.oxAutomaticoEnAnillo = data.oxMeasurementSwitch === 1;
+      this.oxAutomaticoActivo = this.oxAutomaticoEnAnillo;
+      if (data.oxMeasurementInterval >= 5) {
+        this.intervaloOxigenoSeleccionado = data.oxMeasurementInterval;
+      }
       this.cdr.detectChanges();
     });
 
@@ -652,7 +680,11 @@ export class RingHomePage implements OnInit {
 
     // Red de seguridad: si el anillo se desconecta no llega respuesta alguna
     this.temporizadorMedicion = setTimeout(
-      () => this.finalizarMedicion('El anillo no respondió a tiempo.'),
+      () => {
+        // Damos de baja el listener para que una respuesta tardía no se guarde
+        this.ringBLEservice.detenerMedicionSalud();
+        this.finalizarMedicion('El anillo no respondió a tiempo.');
+      },
       TIEMPO_MAXIMO_MEDICION_MS,
     );
 
@@ -661,9 +693,9 @@ export class RingHomePage implements OnInit {
   }
 
   /** Detiene a petición del usuario la medición de pulso/HRV u oxígeno en curso. */
-  async detenerMedicion() {
-    await this.ringBLEservice.detenerMedicionSalud();
+  detenerMedicion() {
     this.finalizarMedicion();
+    this.ringBLEservice.detenerMedicionSalud();
   }
 
   /** Quita el indicador "Midiendo…" y, si se indica, muestra un error. */
@@ -731,7 +763,7 @@ export class RingHomePage implements OnInit {
 
   /** Limpia todos los datos históricos guardados en el propio anillo. */
   async clearHistData() {
-    await this.ringBLEservice.sendData('cleanHistoricalData');
+    await this.ringBLEservice.clearHistoricalData();
   }
 
   /**
@@ -767,8 +799,8 @@ export class RingHomePage implements OnInit {
         this.lightSleepTime = noche?.LightTime || '--';
         this.REMsleepTime = noche?.RemTime || '--';
         this.wakeTime = noche?.WakeTime || '--';
-        this.sleepStartTime = noche?.SleepTimePeriod.startTime || '--';
-        this.sleepEndTime = noche?.SleepTimePeriod.endTime || '--';
+        this.sleepStartTime = noche?.SleepTimePeriod?.startTime || '--';
+        this.sleepEndTime = noche?.SleepTimePeriod?.endTime || '--';
 
         this.historialAnilloService.guardarMedicion(
           'sueno',
@@ -785,6 +817,92 @@ export class RingHomePage implements OnInit {
     } catch (error) {
       console.error('Erro procesando el sueño en el home: ', error);
     }
+  }
+
+  /**
+   * Calcula SpO2 nocturna, frecuencia respiratoria e inmersión del pulso a
+   * partir del historial descargado, y las guarda en el histórico local.
+   * TODO - Pendiente de comprobar con datos reales de una noche.
+   */
+  async calcularMetricasSueno() {
+    if (this.medicalHist.length === 0) {
+      this.avisar('Primero hay que descargar los históricos');
+      return;
+    }
+
+    const noches = await this.ringBLEservice.calculateSleep(this.medicalHist);
+    const periodos = Array.isArray(noches)
+      ? noches.map((noche: any) => noche?.SleepTimePeriod).filter(Boolean)
+      : [];
+    if (periodos.length === 0) {
+      this.avisar('No hay datos de sueño suficientes');
+      return;
+    }
+
+    const [oxigeno, respiracion, inmersion] = await Promise.all([
+      this.ringBLEservice.calcOxygenSaturation(periodos, this.medicalHist),
+      this.ringBLEservice.calcRespiratoryRate(periodos, this.medicalHist),
+      this.ringBLEservice.calculateHeartRateImmersion(
+        periodos,
+        this.medicalHist,
+      ),
+    ]);
+    console.log('Métricas nocturnas en bruto:', {
+      oxigeno,
+      respiracion,
+      inmersion,
+    });
+
+    type TipoNocturno = 'oxigenoNocturno' | 'respiracion' | 'inmersion';
+    const lote: {
+      tipo: TipoNocturno;
+      valores: Record<string, number>;
+      fecha: string;
+    }[] = [];
+
+    /** Añade un registro al lote si la marca de tiempo y el valor son válidos. */
+    const anadir = (
+      tipo: TipoNocturno,
+      campo: string,
+      marca: any,
+      valor: any,
+    ) => {
+      const fecha = new Date(marca);
+      if (!Number.isNaN(fecha.getTime()) && Number.isFinite(Number(valor))) {
+        lote.push({
+          tipo,
+          valores: { [campo]: Number(valor) },
+          fecha: fecha.toISOString(),
+        });
+      }
+    };
+    oxigeno.forEach((n: any) =>
+      anadir('oxigenoNocturno', 'spo2', n.StartTime, n.Oxygen),
+    );
+    respiracion.forEach((n: any) =>
+      anadir('respiracion', 'rpm', n.StartTime, n.respiratoryRate),
+    );
+    inmersion.forEach((n: any) =>
+      anadir('inmersion', 'porcentaje', n.time, n.heartRateImmersion),
+    );
+
+    if (lote.length === 0) {
+      this.avisar('El anillo no devolvió métricas del sueño');
+      return;
+    }
+
+    // Resumen: el dato más reciente de cada métrica
+    const ultimo = (tipo: TipoNocturno) =>
+      lote.filter((r) => r.tipo === tipo).pop()?.valores;
+    const ox = ultimo('oxigenoNocturno');
+    this.oxigenoNocturno = ox ? Math.round(ox['spo2']) : '--';
+    const resp = ultimo('respiracion');
+    this.respiracion = resp ? Math.round(resp['rpm']) : '--';
+    const inm = ultimo('inmersion');
+    this.inmersion = inm ? inm['porcentaje'] : '--';
+    this.cdr.detectChanges();
+
+    this.historialAnilloService.guardarMedicionesEnLote(lote);
   }
 
   /**
@@ -847,6 +965,9 @@ export class RingHomePage implements OnInit {
       bateria = [],
       movimiento = [],
       reposo = [],
+      oxigenoNocturno: oxNoche = [],
+      respiracion: resp = [],
+      inmersion: inmer = [],
     } = await this.historialAnilloService.obtenerAgrupadoPorTipo(desde);
 
     // Las claves coinciden con las de "graficas"
@@ -859,6 +980,9 @@ export class RingHomePage implements OnInit {
       movimiento: aPuntos(movimiento, 'cuenta'),
       bateria: aPuntos(bateria, 'porcentaje'),
       reposo: aPuntos(reposo, 'bpm'),
+      oxigenoNocturno: aPuntos(oxNoche, 'spo2'),
+      respiracion: aPuntos(resp, 'rpm'),
+      inmersion: aPuntos(inmer, 'porcentaje'),
     };
 
     this.cdr.detectChanges();
@@ -961,6 +1085,10 @@ export class RingHomePage implements OnInit {
    * posición, activa o desactiva la medición automática con el intervalo elegido.
    */
   async cambiarEstadoOxigenoAutomatico() {
+    // Si el cambio viene de la información del anillo, no hay nada que enviar
+    if (this.oxAutomaticoActivo === this.oxAutomaticoEnAnillo) return;
+    this.oxAutomaticoEnAnillo = this.oxAutomaticoActivo;
+
     if (this.oxAutomaticoActivo) {
       await this.activarOxigenoAutomatico();
     } else {

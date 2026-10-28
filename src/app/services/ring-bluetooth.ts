@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { AvisosService } from './avisos.service';
 import {
   BleClient,
   BleDevice,
@@ -30,12 +31,14 @@ const MAX_RECONEXIONES_HISTORICOS = 3;
 //   8) 2.5.29 - Filtrado de datos históricos (ObtainValidHistoricalData) — sustituido por
 //      nuestro propio filtro de validez (isWorn/notCharging/validHeartRate), ver activateMeasurements
 //   9) 2.5.30-2.5.31 - Fluctuación de temperatura y estrés (el manual dice que son solo demo)
-//   10) 2.5.32 - Umbral de conteo de pasos
+//   10) 2.5.32 - Umbral de pasos (ajuste de sensibilidad del contador): este SDK no incluye
+//      ese comando, así que no se puede implementar
 
 @Injectable({
   providedIn: 'root',
 })
 export class RingBluetooth {
+  private avisos = inject(AvisosService);
   /* VARIABLES DE ESTADO */
   private ring_device: BleDevice | null = null;
 
@@ -91,6 +94,7 @@ export class RingBluetooth {
       return this.ring_device;
     } catch (error) {
       console.error('El escaneo falló o fue cancelado:', error);
+      this.avisos.error('No se pudo buscar el anillo');
       return null;
     }
   }
@@ -119,6 +123,7 @@ export class RingBluetooth {
       return true;
     } catch (error) {
       console.error('Error al conectar: ', error);
+      this.avisos.error('No se pudo conectar con el anillo');
       return false;
     }
   }
@@ -175,6 +180,7 @@ export class RingBluetooth {
         return false; // FIXME - debería ser "true" si la desconexión fue exitosa
       } catch (error) {
         console.error('Error al desconectar: ', error);
+        this.avisos.error('No se pudo desconectar el anillo');
       }
     }
     return false;
@@ -231,6 +237,7 @@ export class RingBluetooth {
       return true;
     } catch (error) {
       console.error('[RECONEXIÓN] ERROR AL RECONECTAR:', error);
+      this.avisos.error('No se pudo reconectar con el anillo');
       console.error('Error: ', error);
       return false;
     }
@@ -318,6 +325,7 @@ export class RingBluetooth {
       console.log(`Comando '${cmd}' enviado con éxito al anillo.`);
     } catch (error) {
       console.error(`Error al enviar comando ${error}`);
+      this.avisos.error('Error al enviar un comando al anillo');
     }
   }
 
@@ -342,6 +350,7 @@ export class RingBluetooth {
       );
     } catch (error) {
       console.error(`Error al recibir datos ${error}`);
+      this.avisos.error('Error al recibir datos del anillo');
     }
   }
 
@@ -457,10 +466,21 @@ export class RingBluetooth {
         // Evita contar/emitir el mismo registro dos veces si el anillo reenvía
         // datos ya recibidos tras una reconexión automática
         const seenUuids = new Set<number>();
+        // Para saber si, tras reconectar, el anillo continúa o reenvía desde el principio
+        let repetidos = 0;
+        let reconexionVista = 0;
 
         const historicalDataListener = {
           onResult: async (data: any) => {
-            if (seenUuids.has(data.uuid)) return; // Registro duplicado, lo ignoramos
+            const duplicado = seenUuids.has(data.uuid);
+            if (duplicado) repetidos++;
+            if (this.intentosReconexionHistoricos !== reconexionVista) {
+              reconexionVista = this.intentosReconexionHistoricos;
+              console.log(
+                `[HISTÓRICOS] Tras la reconexión ${reconexionVista}, el primer registro es ${duplicado ? 'REPETIDO (reenvía desde el principio)' : 'NUEVO (continúa donde lo dejó)'} | únicos recibidos: ${seenUuids.size}`,
+              );
+            }
+            if (duplicado) return; // Registro duplicado, lo ignoramos
             seenUuids.add(data.uuid);
 
             // Filtro de validez movido aquí desde el front: solo emitimos registros
@@ -478,7 +498,7 @@ export class RingBluetooth {
 
             if (register_counter >= reghistNum) {
               console.log(
-                '✅ DESCARGA COMPLETA: se han recibido todos los registros históricos',
+                `✅ DESCARGA COMPLETA: se han recibido todos los registros históricos (repetidos descartados: ${repetidos})`,
               );
               this.descargandoHistoricos = false; // Descarga completa, desactivamos el control
               SDK.default.unregisterHistoricalDataListener(
@@ -627,6 +647,10 @@ export class RingBluetooth {
           },
         };
 
+        // Si quedaba una medición anterior registrada, la damos de baja para no duplicar datos
+        if (this.medicionSalud) {
+          SDK.default.unregisterHealthListener(this.medicionSalud.listener);
+        }
         this.medicionSalud = {
           listener: healthListener,
           cierre: type === 'openSingleHealth' ? 'closeSingleHealth' : 'closeHealth',
@@ -677,26 +701,61 @@ export class RingBluetooth {
   }
 
   /**
-   * TODO - Sin implementar (manual 2.5.15). Ya disponemos de calculateSleep()
-   * para obtener el sleepTimeArray necesario.
+   * Extrae la lista de resultados del SDK, que según la función llega como
+   * array directo o dentro de `{ type, result }`.
+   */
+  private extraerLista(resultado: any): any[] {
+    if (Array.isArray(resultado)) return resultado;
+    return Array.isArray(resultado?.result) ? resultado.result : [];
+  }
+
+  /**
+   * Calcula la saturación de oxígeno durante el sueño (manual 2.5.15).
+   * TODO - Pendiente de comprobar con datos reales de una noche: con datos
+   * sintéticos el SDK no detecta sueño, así que el formato de salida
+   * (`StartTime`, `EndTime`, `Oxygen`) es el del manual, sin verificar.
+   *
+   * @param sleepTimeArray - Periodos de sueño (`SleepTimePeriod` de calculateSleep).
+   * @param historicalDataArray - Historial descargado del anillo.
    */
   async calcOxygenSaturation(
     sleepTimeArray: any[],
     historicalDataArray: any[],
-  ): Promise<any> {
-    // TODO - Sin datos de sueño no se puede hacer (pero ya tenemos calculateSleep() disponible)
+  ): Promise<any[]> {
+    try {
+      return this.extraerLista(
+        SDK.default.calcOxygenSaturation(sleepTimeArray, historicalDataArray),
+      );
+    } catch (error) {
+      console.error('Error al calcular el oxígeno nocturno:', error);
+      return [];
+    }
   }
 
   /**
-   * TODO - Sin implementar (manual 2.5.16). Ya disponemos de calculateSleep()
-   * para obtener el sleepTimeArray necesario.
+   * Calcula la frecuencia respiratoria durante el sueño (manual 2.5.16).
+   * TODO - Pendiente de comprobar con datos reales (salida según el manual:
+   * `StartTime`, `EndTime`, `respiratoryRate`).
+   *
+   * @param timeStamp - -1 para todas las noches, o la marca de tiempo de un día concreto.
    */
   async calcRespiratoryRate(
     sleepTimeArray: any[],
     historicalDataArray: any[],
-    timeStamp: string,
-  ): Promise<any> {
-    // TODO - Sin datos de sueño no se puede hacer (pero ya tenemos calculateSleep() disponible)
+    timeStamp: number = -1,
+  ): Promise<any[]> {
+    try {
+      return this.extraerLista(
+        SDK.default.calcRespiratoryRate(
+          sleepTimeArray,
+          historicalDataArray,
+          timeStamp,
+        ),
+      );
+    } catch (error) {
+      console.error('Error al calcular la frecuencia respiratoria:', error);
+      return [];
+    }
   }
 
   /** Calcula el pulso en reposo a partir del historial de pulso. */
@@ -724,18 +783,38 @@ export class RingBluetooth {
   }
 
   /**
-   * TODO - Sin implementar (manual 2.5.18).
-   * TODO - El propio historicalDataArray ya contiene el pulso, se podría
-   * simplificar generando heartRateArray internamente.
+   * Calcula la inmersión del pulso (descenso nocturno respecto al diurno,
+   * manual 2.5.18). El array de pulso se genera aquí desde el propio historial.
+   * TODO - Pendiente de comprobar con datos reales (salida según el manual:
+   * `time`, `heartRateImmersion`).
+   *
+   * @param timeStamp - -1 para todas las noches, o la marca de tiempo de un día concreto.
    */
   async calculateHeartRateImmersion(
     sleepTimeArray: any[],
     historicalDataArray: any[],
-    heartRateArray: any[],
-    timeStamp: string,
-  ): Promise<any> {
-    // TODO - Sin datos de sueño no se puede hacer
-    // TODO - Se puede simplificar extrayendo heartRateArray del propio historicalDataArray
+    timeStamp: number = -1,
+  ): Promise<any[]> {
+    try {
+      const heartRateArray = historicalDataArray.map((registro) => ({
+        ts: registro.timeStamp,
+        hr: registro.heartRate,
+        hrv: registro.hrv,
+        motion: registro.motionDetectionCount,
+        steps: registro.step,
+      }));
+      return this.extraerLista(
+        SDK.default.calcHeartRateImmersion(
+          sleepTimeArray,
+          historicalDataArray,
+          heartRateArray,
+          timeStamp,
+        ),
+      );
+    } catch (error) {
+      console.error('Error al calcular la inmersión del pulso:', error);
+      return [];
+    }
   }
 
   /** Activa o desactiva el modo deporte del anillo. */

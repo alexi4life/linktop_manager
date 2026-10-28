@@ -26,6 +26,17 @@ export interface RegistroMedicion {
 export class HistorialService {
   public datosActualizados$ = new Subject<void>();
 
+  // Cadena de escrituras: evita que dos guardados simultáneos lean el mismo
+  // estado y uno pise al otro
+  private cola: Promise<unknown> = Promise.resolve();
+
+  /** Ejecuta la tarea cuando terminen las anteriores. */
+  private enCola<T>(tarea: () => Promise<T>): Promise<T> {
+    const resultado = this.cola.then(tarea);
+    this.cola = resultado.catch(() => undefined);
+    return resultado;
+  }
+
   /**
    * Guarda una nueva medición en el almacén local del dispositivo.
    * Añade el registro al final de la lista existente, sin borrar nada anterior.
@@ -33,7 +44,14 @@ export class HistorialService {
    * @param tipo - Tipo de sensor que generó la medición.
    * @param valores - Los datos numéricos concretos de esa medición.
    */
-  async guardarMedicion(
+  guardarMedicion(
+    tipo: RegistroMedicion['tipo'],
+    valores: Record<string, number>,
+  ): Promise<void> {
+    return this.enCola(() => this.escribirMedicion(tipo, valores));
+  }
+
+  private async escribirMedicion(
     tipo: RegistroMedicion['tipo'],
     valores: Record<string, number>,
   ): Promise<void> {
@@ -62,29 +80,12 @@ export class HistorialService {
    */
   async obtenerHistorial(): Promise<RegistroMedicion[]> {
     const resultado = await Preferences.get({ key: CLAVE_HISTORIAL });
-    if (!resultado.value) return [];
-    return JSON.parse(resultado.value);
-  }
-
-  /**
-   * Recupera los registros de un tipo concreto, pero solo los que caen dentro
-   * de un rango de fechas. Útil para mostrar "última semana", "último mes", etc.
-   *
-   * @param tipo - Tipo de sensor a consultar.
-   * @param desde - Fecha de inicio del rango (inclusive).
-   * @param hasta - Fecha de fin del rango (inclusive). Si no se indica, se usa el momento actual.
-   */
-  async obtenerHistorialPorTipoYFecha(
-    tipo: RegistroMedicion['tipo'],
-    desde: Date,
-    hasta: Date = new Date(),
-  ): Promise<RegistroMedicion[]> {
-    const historial = await this.obtenerHistorial();
-    return historial.filter((registro) => {
-      if (registro.tipo !== tipo) return false;
-      const fechaRegistro = new Date(registro.fecha);
-      return fechaRegistro >= desde && fechaRegistro <= hasta;
-    });
+    try {
+      return resultado.value ? JSON.parse(resultado.value) : [];
+    } catch (error) {
+      console.error('Error al leer el historial del Health Monitor:', error);
+      return [];
+    }
   }
 
   /**
@@ -110,25 +111,4 @@ export class HistorialService {
     return agrupado;
   }
 
-  /**
-   * Recupera solo la última medición guardada de un tipo concreto.
-   * Útil para mostrar "tu última temperatura" sin tener que filtrar todo el historial cada vez.
-   *
-   * @param tipo - Tipo de sensor a consultar.
-   */
-  async obtenerUltimaMedicion(
-    tipo: RegistroMedicion['tipo'],
-  ): Promise<RegistroMedicion | null> {
-    const historial = await this.obtenerHistorial();
-    const filtradas = historial.filter((r) => r.tipo === tipo);
-    if (filtradas.length === 0) return null;
-    return filtradas[filtradas.length - 1];
-  }
-
-  /**
-   * Borra todo el historial guardado. Pensado para un futuro botón de "reiniciar datos".
-   */
-  async borrarHistorial(): Promise<void> {
-    await Preferences.remove({ key: CLAVE_HISTORIAL });
-  }
 }

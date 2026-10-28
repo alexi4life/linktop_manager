@@ -148,9 +148,6 @@ app-ring-home {
   .color-pulso {
     color: #ff3b30;
   }
-  .color-ecg {
-    color: #ff2d55; // Rosa "corazón", el mismo que la onda del ECG
-  }
   .color-bateria {
     color: #34c759;
   }
@@ -182,6 +179,37 @@ app-ring-home {
     &.alerta-error {
       background: #f8d7da;
       color: #721c24;
+    }
+  }
+
+  // ----- Filas de información del dispositivo (versión, MAC, SN...) -----
+  .lista-info-dispositivo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-weight: 400;
+  }
+
+  .etiqueta-info {
+    font-size: 0.85rem;
+    color: #8e8e93; // gris iOS típico para etiquetas secundarias
+  }
+  .dato-info {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1c1c1e;
+    text-align: right;
+  }
+
+  .fila-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e5e5ea; // misma línea gris que ya usas en la cuadrícula del ECG
+
+    &:last-child {
+      border-bottom: none;
     }
   }
 }

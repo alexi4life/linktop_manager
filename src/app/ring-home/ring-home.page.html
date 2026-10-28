@@ -21,7 +21,7 @@
   <!-- ===== SECCIÓN MEDIDAS ===== -->
   <div *ngIf="seccion === 'medidas'">
     <!-- Botón para vincular por primera vez (nunca ha habido anillo vinculado) -->
-    <div *ngIf="!hasRing" class="ion-text-center ion-margin-top">
+    <div *ngIf="!hasRing" class="ion-text-center ion-margin-vertical">
       <ion-button
         expand="block"
         class="boton-ios"
@@ -35,7 +35,10 @@
     <!-- Botón para reconectar a mano: aparece cuando hay anillo vinculado pero
        no está conectado ahora mismo (por ejemplo, si la reconexión automática
        falló por limitaciones del navegador) -->
-    <div *ngIf="hasRing && !connected" class="ion-text-center ion-margin-top">
+    <div
+      *ngIf="hasRing && !connected"
+      class="ion-text-center ion-margin-vertical"
+    >
       <ion-button
         expand="block"
         class="boton-ios"
@@ -224,6 +227,44 @@
         <div class="boton-medir">
           <ion-button expand="block" class="boton-ios" (click)="sleepdata()"
             >Analizar sueño</ion-button
+          >
+        </div>
+      </div>
+
+      <!-- Métricas del sueño (TODO: comprobar con datos reales de una noche) -->
+      <div class="tarjeta-sensor tarjeta-ancha">
+        <div class="cabecera-sensor">
+          <ion-icon name="moon-outline" class="color-sueno"></ion-icon>
+          <span class="nombre-sensor">Métricas del sueño</span>
+        </div>
+        <div class="valor-sensor lista-info-dispositivo">
+          <div class="fila-info">
+            <span class="etiqueta-info">SpO2 nocturna</span>
+            <span class="dato-info"
+              >{{ oxigenoNocturno | numero
+              }}{{ oxigenoNocturno !== '--' ? ' %' : '' }}</span
+            >
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Frecuencia respiratoria</span>
+            <span class="dato-info"
+              >{{ respiracion | numero
+              }}{{ respiracion !== '--' ? ' rpm' : '' }}</span
+            >
+          </div>
+          <div class="fila-info">
+            <span class="etiqueta-info">Inmersión del pulso</span>
+            <span class="dato-info"
+              >{{ inmersion | numero: 1 }}{{ inmersion !== '--' ? ' %' : '' }}</span
+            >
+          </div>
+        </div>
+        <div class="boton-medir">
+          <ion-button
+            expand="block"
+            class="boton-ios"
+            (click)="calcularMetricasSueno()"
+            >Calcular</ion-button
           >
         </div>
       </div>

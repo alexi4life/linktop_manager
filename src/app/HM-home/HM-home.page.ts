@@ -24,10 +24,8 @@ import {
   pulseOutline,
   batteryHalfOutline,
   heartOutline,
-  checkmarkCircle,
-  warningOutline,
 } from 'ionicons/icons';
-import { LinktopService } from '../services/HM-linktop';
+import { HealthMonitorService } from '../services/HM-health-monitor';
 import { CommonModule } from '@angular/common';
 import { HistorialService } from '../services/HM-historial.service';
 import { GraficaHistoricoComponent } from '../components/grafica-historico/grafica-historico.component';
@@ -193,7 +191,7 @@ export class HomePage implements OnInit {
   }
 
   constructor(
-    private LTS: LinktopService,
+    private LTS: HealthMonitorService,
     private cdr: ChangeDetectorRef,
     private historial: HistorialService,
   ) {
@@ -204,8 +202,6 @@ export class HomePage implements OnInit {
       waterOutline,
       pulseOutline,
       heartOutline,
-      checkmarkCircle,
-      warningOutline,
     });
   }
 
@@ -227,7 +223,7 @@ export class HomePage implements OnInit {
     this.cargarGraficasDesdeAlmacenamiento();
   }
 
-  /** Busca el monitor Linktop cercano y se conecta a él. */
+  /** Busca el Health Monitor cercano y se conecta a él. */
   async buscarDispositivo() {
     this.estadoConexion = 'buscando';
     const respuesta = await this.LTS.escanearConectar();
@@ -343,6 +339,7 @@ export class HomePage implements OnInit {
 
   /** Detiene la medición activa (oxígeno, presión o ECG) en el monitor. */
   cancelarMedicion() {
+    this.ecgAnimacionActiva = false;
     if (this.medicionActiva) this.LTS.cancelarMedicion(this.medicionActiva);
     this.midiendoOX = false;
     this.midiendoBP = false;

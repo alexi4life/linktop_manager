@@ -1,19 +1,12 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { AvisosService } from './avisos.service';
 import { BleClient } from '@capacitor-community/bluetooth-le';
-import { ExceptionCode } from '@capacitor/core';
-
-declare var Engine: any;
 
 // Parametros de conexión del bluetooth (health monitor)
-const LINKTOP_UUIDS = {
+const HM_UUIDS = {
   SERVICE_HEALTH_DETECT: '0000ff27-0000-1000-8000-00805f9b34fb',
   CHARACTERISTIC_HEART_RATE_WRITE: '0000fff1-0000-1000-8000-00805f9b34fb',
   CHARACTERISTIC_HEART_RATE_MEASUREMENT: '0000fff4-0000-1000-8000-00805f9b34fb',
-  DESCRIPTORS_GENERAL: '00002901-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_SER_UUID: '0000180a-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_FIRMWARE_REV_UUID: '00002a26-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_HARDWARE_PCB_UUID: '00002a27-0000-1000-8000-00805f9b34fb',
-  DEV_INFO_SOFTWARE_REV_UUID: '00002a28-0000-1000-8000-00805f9b34fb',
 };
 
 // Tipos de medición, tal como los define el manual oficial del HC03 (sección 2.3.2)
@@ -29,7 +22,8 @@ const Detection = {
 @Injectable({
   providedIn: 'root',
 })
-export class LinktopService {
+export class HealthMonitorService {
+  private avisos = inject(AvisosService);
   // Variables
   private dispositivoConectado: any = null;
   private SDK: any = null;
@@ -65,6 +59,7 @@ export class LinktopService {
       await BleClient.initialize();
       return 'Bluetooth listo. Esperando escaneo...';
     } catch (error) {
+      this.avisos.error('No se pudo iniciar el Bluetooth');
       return 'Error al iniciar el Bluetooth' + error;
     }
   }
@@ -81,7 +76,7 @@ export class LinktopService {
     try {
       // 1. Escaneo y selección del dispositivo mediante filtro por UUID de servicio
       const device = await BleClient.requestDevice({
-        services: [LINKTOP_UUIDS.SERVICE_HEALTH_DETECT],
+        services: [HM_UUIDS.SERVICE_HEALTH_DETECT],
       });
       this.dispositivoConectado = device;
 
@@ -123,6 +118,7 @@ export class LinktopService {
           },
           onException: (error: any) => {
             console.log('[SDK] Excepción global:', error);
+            this.avisos.error('Error del Health Monitor');
           },
           /**
            * Intercepta los bytes generados por el algoritmo del SDK
@@ -134,12 +130,13 @@ export class LinktopService {
               try {
                 await BleClient.write(
                   this.dispositivoConectado.deviceId,
-                  LINKTOP_UUIDS.SERVICE_HEALTH_DETECT,
-                  LINKTOP_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE, // Característica fff1
+                  HM_UUIDS.SERVICE_HEALTH_DETECT,
+                  HM_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE, // Característica fff1
                   new DataView(new Uint8Array(data).buffer),
                 );
               } catch (error) {
                 console.error('Error al transmitir comando del SDK:', error);
+                this.avisos.error('Error al enviar un comando al Health Monitor');
               }
             }
           },
@@ -153,8 +150,8 @@ export class LinktopService {
       // Redirige los bytes puros (raw data) recibidos directamente hacia el algoritmo del SDK
       await BleClient.startNotifications(
         device.deviceId,
-        LINKTOP_UUIDS.SERVICE_HEALTH_DETECT,
-        LINKTOP_UUIDS.CHARACTERISTIC_HEART_RATE_MEASUREMENT,
+        HM_UUIDS.SERVICE_HEALTH_DETECT,
+        HM_UUIDS.CHARACTERISTIC_HEART_RATE_MEASUREMENT,
         (value: DataView) => {
           if (this.SDK && this.SDK.pushRawData) {
             this.SDK.pushRawData(value.buffer);
@@ -165,6 +162,7 @@ export class LinktopService {
       return 'Conectado con éxito a ' + device.name;
     } catch (error) {
       // Captura tanto fallos de conexión como la cancelación del escaneo por parte del usuario
+      this.avisos.error('No se pudo conectar con el Health Monitor');
       return 'Error o escaneo cancelado: ' + error;
     }
   }
@@ -194,6 +192,7 @@ export class LinktopService {
         },
         onException: (error: any) => {
           console.log('ERROR DE EXCEPCION EN SDK: ', error);
+          this.avisos.error('Error del Health Monitor');
         },
         onResult: (temp: any) => {
           // Cuando el algoritmo del SDK termina con éxito, despacha el valor final al callback
@@ -284,6 +283,7 @@ export class LinktopService {
         },
         onException: (error: any) => {
           console.log('[SDK-OX] Excepción en oxímetro:', error);
+          this.avisos.error('Error del oxímetro del Health Monitor');
         },
         onRawResult: (red: any, ir: any) => {},
         onFinger: (isTouch: boolean) => {
@@ -332,6 +332,7 @@ export class LinktopService {
         onProcess: (process: any) => {},
         onException: (error: any) => {
           console.log('[BATTERY] Error:', error);
+          this.avisos.error('Error al leer la batería del Health Monitor');
         },
         onPowerResult: (data: any) => {
           // El SDK devuelve el porcentaje de energía remanente (escala 0 - 100)
@@ -363,6 +364,12 @@ export class LinktopService {
   async cancelarMedicion(tipo: 'OX' | 'BP' | 'BG' | 'BT' | 'ECG' | 'BATTERY') {
     if (this.SDK && this.SDK.stopDetect) {
       this.cancelado = true;
+      // El stopDetect emite onModeChange(null) al instante: si el oxígeno no
+      // está ya cerrado, se tomaría la parada del usuario por una interrupción
+      if (tipo === 'OX') {
+        this.medicionOXFinalizando = true;
+        this.oxigenoActivo = false;
+      }
       this.SDK.stopDetect(Detection[tipo]);
       this.SDK.unRegisterOXListener();
       this.SDK.unRegisterBPListener();
@@ -375,12 +382,13 @@ export class LinktopService {
           ]);
           await BleClient.write(
             this.dispositivoConectado.deviceId,
-            LINKTOP_UUIDS.SERVICE_HEALTH_DETECT,
-            LINKTOP_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE,
+            HM_UUIDS.SERVICE_HEALTH_DETECT,
+            HM_UUIDS.CHARACTERISTIC_HEART_RATE_WRITE,
             new DataView(comandoParada.buffer),
           );
         } catch (error) {
           console.error('[SDK] Error al enviar comando de parada:', error);
+          this.avisos.error('Error al detener la medición del Health Monitor');
         }
       }
     }
@@ -455,16 +463,6 @@ export class LinktopService {
       console.log('Error: SDK o registerBPListener no están definidos');
     }
   }
-
-  // FIXME - Se intentó integrar NeuroSky (algoritmo linktop) para calcular HR, HRV, ánimo y
-  // frecuencia respiratoria a partir de la onda del ECG, siguiendo el ejemplo del manual
-  // y reconstruyendo nosotros mismos el parseo de bytes BLE crudos.
-  // Resultado: el HR de NeuroSky fue inconsistente en pruebas repetidas. Se descarta NeuroSky
-  // por falta de fiabilidad demostrada.
-
-  // TODO - Si se consigue documentación oficial del fabricante sobre la frecuencia de
-  // muestreo real del ADC y el formato exacto de "processBluetoothEcgData", reintentar
-  // NeuroSky para poder ofrecer ánimo y frecuencia respiratoria (no calculados por el SDK nativo).
 
   /**
    * Inicia la medición de ECG (electrocardiograma).

@@ -1,26 +1,6 @@
 // Los estilos comunes a las páginas de dispositivo (tarjetas, botones,
 // mensajes, cabecera...) están en src/theme/dispositivo.scss
 
-// ===== TARJETA DE INFORMACIÓN DEL DISPOSITIVO =====
-.lista-info-dispositivo {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-weight: 400;
-}
-
-.fila-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #e5e5ea; // misma línea gris que ya usas en la cuadrícula del ECG
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
 .fila-selector {
   align-items: center; // centra verticalmente la etiqueta con el desplegable
 }
@@ -34,10 +14,6 @@
   max-width: 60%; // evita que el desplegable empuje la etiqueta fuera de la fila
 }
 
-.etiqueta-info {
-  font-size: 0.85rem;
-  color: #8e8e93; // gris iOS típico para etiquetas secundarias
-}
 .fila-selector {
   // Anulamos el space-between de .fila-info: aquí no queremos etiqueta a un lado
   // y valor al otro, sino todo centrado y apilado
@@ -60,13 +36,6 @@
 
 .switch-ios {
   --background-checked: #34c759;
-}
-
-.dato-info {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1c1c1e;
-  text-align: right;
 }
 
 // Cabecera de las tarjetas de configuración (oxígeno nocturno)
